@@ -20,7 +20,8 @@ fun AppNavigation() {
     NavHost(navController, startDestination = Routes.TASKS) {
         composable(Routes.TASKS) {
             TasksScreen(
-                onNavigateToCalendar = { navController.navigate(Routes.CALENDAR) }
+                onNavigateToCalendar = { navController.navigate(Routes.CALENDAR) },
+                onNavigateToSettings = { navController.navigate(Routes.SETTINGS) }
             )
         }
         composable(Routes.CALENDAR) {
