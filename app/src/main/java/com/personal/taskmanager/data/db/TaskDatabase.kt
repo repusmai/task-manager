@@ -9,7 +9,7 @@ import com.personal.taskmanager.data.model.Task
 @Database(
     entities = [Task::class, Category::class],
     version = 1,
-    exportSchema = true
+    exportSchema = false
 )
 @TypeConverters(Converters::class)
 abstract class TaskDatabase : RoomDatabase() {
