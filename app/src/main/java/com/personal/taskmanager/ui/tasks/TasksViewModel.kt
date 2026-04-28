@@ -1,5 +1,6 @@
 package com.personal.taskmanager.ui.tasks
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.personal.taskmanager.data.model.*
@@ -8,7 +9,6 @@ import com.personal.taskmanager.notifications.cancelReminder
 import com.personal.taskmanager.notifications.scheduleReminder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import android.content.Context
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -73,7 +73,6 @@ class TasksViewModel @Inject constructor(
     fun markComplete(task: Task) = viewModelScope.launch {
         cancelReminder(context, task.id)
         repository.markComplete(task.id)
-        // Handle recurrence
         if (task.recurrenceType != RecurrenceType.NONE) {
             val nextDate = when (task.recurrenceType) {
                 RecurrenceType.DAILY -> task.dueDate?.plusDays(1)

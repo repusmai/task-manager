@@ -5,13 +5,11 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.personal.taskmanager.data.model.Appointment
-import com.personal.taskmanager.data.model.Category
-import com.personal.taskmanager.data.model.Task
+import com.personal.taskmanager.data.model.*
 
 @Database(
-    entities = [Task::class, Appointment::class, Category::class],
-    version = 2,
+    entities = [Task::class, Appointment::class, Category::class, Routine::class, RoutineStep::class],
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -19,6 +17,7 @@ abstract class TaskDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
     abstract fun appointmentDao(): AppointmentDao
     abstract fun categoryDao(): CategoryDao
+    abstract fun routineDao(): RoutineDao
 }
 
 val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -36,6 +35,40 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
                 colorHex TEXT NOT NULL DEFAULT '#6750A4',
                 reminderMinutesBefore INTEGER,
                 createdAt INTEGER NOT NULL
+            )
+        """.trimIndent())
+    }
+}
+
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Add routineId to tasks
+        db.execSQL("ALTER TABLE tasks ADD COLUMN routineId INTEGER")
+
+        // Create routines table
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS routines (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                colorHex TEXT NOT NULL DEFAULT '#00838F',
+                scheduledTime TEXT,
+                scheduledDays TEXT NOT NULL DEFAULT '',
+                isActive INTEGER NOT NULL DEFAULT 1,
+                createdAt INTEGER NOT NULL
+            )
+        """.trimIndent())
+
+        // Create routine_steps table
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS routine_steps (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                routineId INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                durationMinutes INTEGER,
+                priority TEXT NOT NULL DEFAULT 'MEDIUM',
+                orderIndex INTEGER NOT NULL DEFAULT 0
             )
         """.trimIndent())
     }

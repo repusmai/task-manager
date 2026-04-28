@@ -19,40 +19,57 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.personal.taskmanager.data.model.*
+import com.personal.taskmanager.ui.appointments.AddEditAppointmentSheet
+import com.personal.taskmanager.ui.appointments.AppointmentsViewModel
 import com.personal.taskmanager.ui.appointments.SimpleDatePickerDialog
 import com.personal.taskmanager.ui.appointments.SimpleTimePickerDialog
+import com.personal.taskmanager.ui.appointments.AppointmentCard
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+
+// What the FAB "+" expands into
+enum class AddItemType { TASK, APPOINTMENT }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TasksScreen(
     onNavigateToCalendar: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onNavigateToAppointments: () -> Unit,
-    viewModel: TasksViewModel = hiltViewModel()
+    onNavigateToRoutines: () -> Unit,
+    tasksViewModel: TasksViewModel = hiltViewModel(),
+    appointmentsViewModel: AppointmentsViewModel = hiltViewModel()
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val tasksState by tasksViewModel.uiState.collectAsState()
+    val appointmentsState by appointmentsViewModel.uiState.collectAsState()
+
+    var showAddSelector by remember { mutableStateOf(false) }
     var showAddTask by remember { mutableStateOf(false) }
+    var showAddAppointment by remember { mutableStateOf(false) }
     var taskToEdit by remember { mutableStateOf<Task?>(null) }
+    var appointmentToEdit by remember { mutableStateOf<Appointment?>(null) }
+    var selectedTab by remember { mutableIntStateOf(0) }
+
+    // Keep both ViewModels in sync on date
+    LaunchedEffect(tasksState.selectedDate) {
+        appointmentsViewModel.selectDate(tasksState.selectedDate)
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text("My Tasks", fontWeight = FontWeight.Bold)
+                        Text("My Day", fontWeight = FontWeight.Bold)
                         Text(
-                            state.selectedDate.format(DateTimeFormatter.ofPattern("EEEE, MMM d")),
+                            tasksState.selectedDate.format(DateTimeFormatter.ofPattern("EEEE, MMM d")),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
                 actions = {
-                    IconButton(onClick = onNavigateToAppointments) {
-                        Icon(Icons.Default.EventNote, "Appointments")
+                    IconButton(onClick = onNavigateToRoutines) {
+                        Icon(Icons.Default.Loop, "Routines")
                     }
                     IconButton(onClick = onNavigateToCalendar) {
                         Icon(Icons.Default.CalendarMonth, "Calendar")
@@ -65,47 +82,160 @@ fun TasksScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { showAddTask = true },
-                icon = { Icon(Icons.Default.Add, "Add task") },
-                text = { Text("New Task") }
+                onClick = { showAddSelector = true },
+                icon = { Icon(Icons.Default.Add, "Add") },
+                text = { Text("Add") }
             )
         }
     ) { padding ->
         Column(Modifier.padding(padding)) {
-            DateStrip(selectedDate = state.selectedDate, onDateSelected = viewModel::selectDate)
-            FilterRow(current = state.filterStatus, onFilter = viewModel::setFilter)
+            DateStrip(selectedDate = tasksState.selectedDate, onDateSelected = tasksViewModel::selectDate)
 
-            if (state.tasks.isEmpty()) {
-                EmptyState()
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(state.tasks, key = { it.id }) { task ->
-                        TaskCard(
-                            task = task,
-                            categories = state.categories,
-                            onComplete = { viewModel.markComplete(task) },
-                            onEdit = { taskToEdit = task },
-                            onDelete = { viewModel.deleteTask(task) }
-                        )
+            // Tab selector: Tasks | Appointments
+            TabRow(selectedTabIndex = selectedTab) {
+                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 },
+                    text = { Text("Tasks (${tasksState.tasks.size})") },
+                    icon = { Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(16.dp)) })
+                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 },
+                    text = { Text("Appointments (${appointmentsState.appointments.size})") },
+                    icon = { Icon(Icons.Default.EventNote, null, modifier = Modifier.size(16.dp)) })
+            }
+
+            when (selectedTab) {
+                0 -> {
+                    FilterRow(current = tasksState.filterStatus, onFilter = tasksViewModel::setFilter)
+                    if (tasksState.tasks.isEmpty()) {
+                        EmptyState(message = "No tasks for this day", sub = "Tap + to add one")
+                    } else {
+                        LazyColumn(
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(tasksState.tasks, key = { it.id }) { task ->
+                                TaskCard(
+                                    task = task,
+                                    categories = tasksState.categories,
+                                    onComplete = { tasksViewModel.markComplete(task) },
+                                    onEdit = { taskToEdit = task },
+                                    onDelete = { tasksViewModel.deleteTask(task) }
+                                )
+                            }
+                        }
+                    }
+                }
+                1 -> {
+                    if (appointmentsState.appointments.isEmpty()) {
+                        EmptyState(message = "No appointments for this day", sub = "Tap + to add one")
+                    } else {
+                        LazyColumn(
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(appointmentsState.appointments, key = { it.id }) { appt ->
+                                AppointmentCard(
+                                    appointment = appt,
+                                    onEdit = { appointmentToEdit = appt },
+                                    onDelete = { appointmentsViewModel.deleteAppointment(appt) }
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
+    // Add selector bottom sheet
+    if (showAddSelector) {
+        ModalBottomSheet(onDismissRequest = { showAddSelector = false }) {
+            Column(
+                modifier = Modifier.padding(24.dp).padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("What would you like to add?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Task option
+                    Card(
+                        modifier = Modifier.weight(1f).clickable {
+                            showAddSelector = false
+                            showAddTask = true
+                        },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp).fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.CheckCircle, null,
+                                modifier = Modifier.size(32.dp),
+                                tint = MaterialTheme.colorScheme.primary)
+                            Text("Task", fontWeight = FontWeight.SemiBold)
+                            Text("A to-do item with priority and due date",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        }
+                    }
+                    // Appointment option
+                    Card(
+                        modifier = Modifier.weight(1f).clickable {
+                            showAddSelector = false
+                            showAddAppointment = true
+                        },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp).fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.EventNote, null,
+                                modifier = Modifier.size(32.dp),
+                                tint = MaterialTheme.colorScheme.secondary)
+                            Text("Appointment", fontWeight = FontWeight.SemiBold)
+                            Text("A scheduled event with start and end times",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Add/Edit Task
     if (showAddTask || taskToEdit != null) {
         AddEditTaskSheet(
             task = taskToEdit,
-            categories = state.categories,
-            initialDate = state.selectedDate,
+            categories = tasksState.categories,
+            initialDate = tasksState.selectedDate,
             onDismiss = { showAddTask = false; taskToEdit = null },
             onSave = { task ->
-                if (taskToEdit != null) viewModel.updateTask(task)
-                else viewModel.addTask(task)
+                if (taskToEdit != null) tasksViewModel.updateTask(task)
+                else tasksViewModel.addTask(task)
                 showAddTask = false; taskToEdit = null
+            }
+        )
+    }
+
+    // Add/Edit Appointment
+    if (showAddAppointment || appointmentToEdit != null) {
+        AddEditAppointmentSheet(
+            appointment = appointmentToEdit,
+            initialDate = tasksState.selectedDate,
+            onDismiss = { showAddAppointment = false; appointmentToEdit = null },
+            onSave = { appt ->
+                if (appointmentToEdit != null) appointmentsViewModel.updateAppointment(appt)
+                else appointmentsViewModel.addAppointment(appt)
+                showAddAppointment = false; appointmentToEdit = null
             }
         )
     }
@@ -137,19 +267,15 @@ fun DateStrip(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit) {
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    date.format(DateTimeFormatter.ofPattern("EEE")),
+                Text(date.format(DateTimeFormatter.ofPattern("EEE")),
                     style = MaterialTheme.typography.labelSmall,
                     color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    date.dayOfMonth.toString(),
+                    else MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(date.dayOfMonth.toString(),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurface
-                )
+                    else MaterialTheme.colorScheme.onSurface)
             }
         }
     }
@@ -158,9 +284,7 @@ fun DateStrip(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit) {
 @Composable
 fun FilterRow(current: TaskStatus?, onFilter: (TaskStatus?) -> Unit) {
     Row(
-        modifier = Modifier
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         FilterChip(selected = current == null, onClick = { onFilter(null) }, label = { Text("All") })
@@ -192,14 +316,17 @@ fun TaskCard(
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        task.title,
-                        style = MaterialTheme.typography.bodyLarge,
+                    Text(task.title, style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                         textDecoration = if (isCompleted) TextDecoration.LineThrough else null,
-                        color = if (isCompleted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
-                    )
+                        color = if (isCompleted) MaterialTheme.colorScheme.onSurfaceVariant
+                                else MaterialTheme.colorScheme.onSurface)
                     if (isOverdue) { Spacer(Modifier.width(6.dp)); Badge { Text("Overdue") } }
+                    task.routineId?.let {
+                        Spacer(Modifier.width(6.dp))
+                        AssistChip(onClick = {}, label = { Text("Routine", style = MaterialTheme.typography.labelSmall) },
+                            leadingIcon = { Icon(Icons.Default.Loop, null, Modifier.size(12.dp)) })
+                    }
                 }
                 if (task.description.isNotBlank()) {
                     Text(task.description, style = MaterialTheme.typography.bodySmall,
@@ -225,7 +352,9 @@ fun TaskCard(
                     Icon(Icons.Default.Edit, "Edit", modifier = Modifier.size(18.dp))
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Delete, "Delete", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                    Icon(Icons.Default.Delete, "Delete",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -244,13 +373,18 @@ fun PriorityChip(priority: Priority) {
 }
 
 @Composable
-fun EmptyState() {
+fun EmptyState(message: String = "Nothing here", sub: String = "") {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outlineVariant)
+            Icon(Icons.Default.CheckCircle, null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(12.dp))
-            Text("No tasks for this day", style = MaterialTheme.typography.titleMedium)
-            Text("Tap + to add one", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(message, style = MaterialTheme.typography.titleMedium)
+            if (sub.isNotBlank()) {
+                Text(sub, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
@@ -280,9 +414,7 @@ fun AddEditTaskSheet(
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
-            modifier = Modifier
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp)
+            modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -295,7 +427,6 @@ fun AddEditTaskSheet(
             OutlinedTextField(value = description, onValueChange = { description = it },
                 label = { Text("Description (optional)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
 
-            // Due date and time
             Text("Due Date & Time", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -311,7 +442,6 @@ fun AddEditTaskSheet(
                 }
             }
 
-            // Priority
             Text("Priority", style = MaterialTheme.typography.labelMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Priority.values().forEach { p ->
@@ -320,66 +450,59 @@ fun AddEditTaskSheet(
                 }
             }
 
-            // Recurrence
             Text("Repeat", style = MaterialTheme.typography.labelMedium)
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RecurrenceType.values().forEach { r ->
                     FilterChip(selected = recurrence == r, onClick = { recurrence = r },
                         label = { Text(r.name.lowercase().replaceFirstChar { it.uppercase() }) })
                 }
             }
 
-            // Reminder
             Text("Reminder", style = MaterialTheme.typography.labelMedium)
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(null, 5, 15, 30, 60).forEach { mins ->
                     FilterChip(selected = reminderMinutes == mins, onClick = { reminderMinutes = mins },
                         label = { Text(if (mins == null) "None" else "${mins}m before") })
                 }
             }
 
-            // Category
             if (categories.isNotEmpty()) {
                 Text("Category", style = MaterialTheme.typography.labelMedium)
-                Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = selectedCategoryId == null, onClick = { selectedCategoryId = null }, label = { Text("None") })
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = selectedCategoryId == null,
+                        onClick = { selectedCategoryId = null }, label = { Text("None") })
                     categories.forEach { cat ->
-                        FilterChip(selected = selectedCategoryId == cat.id, onClick = { selectedCategoryId = cat.id }, label = { Text(cat.name) })
+                        FilterChip(selected = selectedCategoryId == cat.id,
+                            onClick = { selectedCategoryId = cat.id }, label = { Text(cat.name) })
                     }
                 }
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Cancel") }
-                Button(
-                    onClick = {
-                        if (title.isNotBlank()) {
-                            onSave((task ?: Task(title = "")).copy(
-                                title = title, description = description, priority = priority,
-                                recurrenceType = recurrence, categoryId = selectedCategoryId,
-                                reminderMinutesBefore = reminderMinutes, dueDate = dueDate, dueTime = dueTime
-                            ))
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { Text("Save") }
+                Button(onClick = {
+                    if (title.isNotBlank()) {
+                        onSave((task ?: Task(title = "")).copy(
+                            title = title, description = description, priority = priority,
+                            recurrenceType = recurrence, categoryId = selectedCategoryId,
+                            reminderMinutesBefore = reminderMinutes, dueDate = dueDate, dueTime = dueTime
+                        ))
+                    }
+                }, modifier = Modifier.weight(1f)) { Text("Save") }
             }
         }
     }
 
     if (showDatePicker) {
-        SimpleDatePickerDialog(
-            initial = dueDate,
-            onDismiss = { showDatePicker = false },
-            onConfirm = { dueDate = it; showDatePicker = false }
-        )
+        SimpleDatePickerDialog(initial = dueDate, onDismiss = { showDatePicker = false },
+            onConfirm = { dueDate = it; showDatePicker = false })
     }
     if (showTimePicker) {
-        SimpleTimePickerDialog(
-            initial = dueTime,
-            onDismiss = { showTimePicker = false },
+        SimpleTimePickerDialog(initial = dueTime, onDismiss = { showTimePicker = false },
             onConfirm = { dueTime = it; showTimePicker = false },
-            onClear = { dueTime = null; showTimePicker = false }
-        )
+            onClear = { dueTime = null; showTimePicker = false })
     }
 }

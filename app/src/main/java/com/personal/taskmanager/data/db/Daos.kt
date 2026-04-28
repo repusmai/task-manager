@@ -1,10 +1,7 @@
 package com.personal.taskmanager.data.db
 
 import androidx.room.*
-import com.personal.taskmanager.data.model.Appointment
-import com.personal.taskmanager.data.model.Category
-import com.personal.taskmanager.data.model.Task
-import com.personal.taskmanager.data.model.TaskStatus
+import com.personal.taskmanager.data.model.*
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -45,7 +42,6 @@ interface AppointmentDao {
     @Query("SELECT * FROM appointments ORDER BY startDate ASC, startTime ASC")
     fun getAllAppointments(): Flow<List<Appointment>>
 
-    // Get appointments that overlap with a given date
     @Query("SELECT * FROM appointments WHERE startDate <= :date AND endDate >= :date ORDER BY startTime ASC")
     fun getAppointmentsForDate(date: String): Flow<List<Appointment>>
 
@@ -75,4 +71,44 @@ interface CategoryDao {
 
     @Delete
     suspend fun deleteCategory(category: Category)
+}
+
+@Dao
+interface RoutineDao {
+    @Query("SELECT * FROM routines ORDER BY name ASC")
+    fun getAllRoutines(): Flow<List<Routine>>
+
+    @Query("SELECT * FROM routines WHERE id = :id")
+    suspend fun getRoutineById(id: Long): Routine?
+
+    @Query("SELECT * FROM routines WHERE isActive = 1 AND scheduledDays != ''")
+    suspend fun getScheduledRoutines(): List<Routine>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRoutine(routine: Routine): Long
+
+    @Update
+    suspend fun updateRoutine(routine: Routine)
+
+    @Delete
+    suspend fun deleteRoutine(routine: Routine)
+
+    // Steps
+    @Query("SELECT * FROM routine_steps WHERE routineId = :routineId ORDER BY orderIndex ASC")
+    fun getStepsForRoutine(routineId: Long): Flow<List<RoutineStep>>
+
+    @Query("SELECT * FROM routine_steps WHERE routineId = :routineId ORDER BY orderIndex ASC")
+    suspend fun getStepsForRoutineSuspend(routineId: Long): List<RoutineStep>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertStep(step: RoutineStep): Long
+
+    @Update
+    suspend fun updateStep(step: RoutineStep)
+
+    @Delete
+    suspend fun deleteStep(step: RoutineStep)
+
+    @Query("DELETE FROM routine_steps WHERE routineId = :routineId")
+    suspend fun deleteStepsForRoutine(routineId: Long)
 }

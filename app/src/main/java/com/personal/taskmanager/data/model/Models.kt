@@ -21,6 +21,7 @@ data class Task(
     val recurrenceType: RecurrenceType = RecurrenceType.NONE,
     val categoryId: Long? = null,
     val reminderMinutesBefore: Int? = null,
+    val routineId: Long? = null, // set when spawned from a routine
     val createdAt: Long = System.currentTimeMillis(),
     val completedAt: Long? = null
 )
@@ -45,4 +46,30 @@ data class Category(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val colorHex: String = "#6750A4"
+)
+
+// A routine template — defines a set of tasks to spawn
+@Entity(tableName = "routines")
+data class Routine(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val description: String = "",
+    val colorHex: String = "#00838F",
+    // Scheduling: null = manual only
+    val scheduledTime: LocalTime? = null,       // time of day to auto-start
+    val scheduledDays: String = "",             // comma-separated ints: "1,3,5" = Mon,Wed,Fri (1=Mon..7=Sun)
+    val isActive: Boolean = true,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+// A single step/task template within a routine
+@Entity(tableName = "routine_steps")
+data class RoutineStep(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val routineId: Long,
+    val title: String,
+    val description: String = "",
+    val durationMinutes: Int? = null, // estimated time
+    val priority: Priority = Priority.MEDIUM,
+    val orderIndex: Int = 0
 )
