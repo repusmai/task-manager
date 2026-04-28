@@ -22,16 +22,19 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
-
-      - name: Get version name
-        id: version
+      - name: Decode keystore
         run: |
-          VERSION=$(./gradlew -q printVersionName 2>/dev/null || grep "versionName" app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/task-manager.keystore
 
-      - name: Delete existing 'latest' release
+      - name: Build signed APK
+        run: ./gradlew assembleRelease
+        env:
+          SIGNING_STORE_FILE: task-manager.keystore
+          SIGNING_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Delete existing latest release
         uses: dev-drprasad/delete-tag-and-release@v1.0
         with:
           tag_name: latest
@@ -42,18 +45,10 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: latest
-          name: "Latest Build (v${{ steps.version.outputs.version }})"
+          name: "Latest Build"
           body: |
             🚀 Automatic build from latest commit on `main`
-            
             **Commit:** ${{ github.sha }}
-            **Built at:** ${{ github.run_id }}
-            
-            ### Install
-            1. Download `app-debug.apk` below
-            2. Open it on your Android device
-            3. Tap Install
-          files: app/build/outputs/apk/debug/app-debug.apk
-          prerelease: false
+          files: app/build/outputs/apk/release/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
