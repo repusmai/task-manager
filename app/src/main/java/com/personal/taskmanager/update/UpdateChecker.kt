@@ -16,7 +16,7 @@ import javax.inject.Singleton
 data class ReleaseInfo(val tagName: String, val apkUrl: String)
 
 // ⚠️ Replace these with your actual GitHub username and repo name
-private const val GITHUB_REPO = "YOUR_USERNAME/YOUR_REPO"
+private const val GITHUB_REPO = "repusmai/task-manager"
 
 @Singleton
 class UpdateChecker @Inject constructor(private val client: OkHttpClient) {
