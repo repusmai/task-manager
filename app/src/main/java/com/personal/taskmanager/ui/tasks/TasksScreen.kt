@@ -1,6 +1,5 @@
 package com.personal.taskmanager.ui.tasks
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,6 +19,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.personal.taskmanager.data.model.*
+import com.personal.taskmanager.ui.appointments.SimpleDatePickerDialog
+import com.personal.taskmanager.ui.appointments.SimpleTimePickerDialog
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -29,6 +30,7 @@ import java.time.format.DateTimeFormatter
 fun TasksScreen(
     onNavigateToCalendar: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToAppointments: () -> Unit,
     viewModel: TasksViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -49,6 +51,9 @@ fun TasksScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onNavigateToAppointments) {
+                        Icon(Icons.Default.EventNote, "Appointments")
+                    }
                     IconButton(onClick = onNavigateToCalendar) {
                         Icon(Icons.Default.CalendarMonth, "Calendar")
                     }
@@ -67,17 +72,8 @@ fun TasksScreen(
         }
     ) { padding ->
         Column(Modifier.padding(padding)) {
-            // Date navigation strip
-            DateStrip(
-                selectedDate = state.selectedDate,
-                onDateSelected = viewModel::selectDate
-            )
-
-            // Filter chips
-            FilterRow(
-                current = state.filterStatus,
-                onFilter = viewModel::setFilter
-            )
+            DateStrip(selectedDate = state.selectedDate, onDateSelected = viewModel::selectDate)
+            FilterRow(current = state.filterStatus, onFilter = viewModel::setFilter)
 
             if (state.tasks.isEmpty()) {
                 EmptyState()
@@ -104,6 +100,7 @@ fun TasksScreen(
         AddEditTaskSheet(
             task = taskToEdit,
             categories = state.categories,
+            initialDate = state.selectedDate,
             onDismiss = { showAddTask = false; taskToEdit = null },
             onSave = { task ->
                 if (taskToEdit != null) viewModel.updateTask(task)
@@ -118,9 +115,6 @@ fun TasksScreen(
 fun DateStrip(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit) {
     val today = LocalDate.now()
     val dates = (-3..10).map { today.plusDays(it.toLong()) }
-
-    LazyColumn {  // Use Row with scroll instead
-    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -176,7 +170,6 @@ fun FilterRow(current: TaskStatus?, onFilter: (TaskStatus?) -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskCard(
     task: Task,
@@ -188,29 +181,15 @@ fun TaskCard(
     val category = categories.find { it.id == task.categoryId }
     val isCompleted = task.status == TaskStatus.COMPLETED
     val isOverdue = task.status == TaskStatus.OVERDUE
-
     val cardColor = when (task.priority) {
         Priority.HIGH -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
         Priority.MEDIUM -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
         Priority.LOW -> MaterialTheme.colorScheme.surfaceVariant
     }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = cardColor)
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Checkbox
-            Checkbox(
-                checked = isCompleted,
-                onCheckedChange = { if (!isCompleted) onComplete() }
-            )
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = cardColor)) {
+        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = isCompleted, onCheckedChange = { if (!isCompleted) onComplete() })
             Spacer(Modifier.width(8.dp))
-
-            // Content
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -218,60 +197,35 @@ fun TaskCard(
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                         textDecoration = if (isCompleted) TextDecoration.LineThrough else null,
-                        color = if (isCompleted) MaterialTheme.colorScheme.onSurfaceVariant
-                        else MaterialTheme.colorScheme.onSurface
+                        color = if (isCompleted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                     )
-                    if (isOverdue) {
-                        Spacer(Modifier.width(6.dp))
-                        Badge { Text("Overdue") }
-                    }
+                    if (isOverdue) { Spacer(Modifier.width(6.dp)); Badge { Text("Overdue") } }
                 }
-
                 if (task.description.isNotBlank()) {
-                    Text(
-                        task.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
+                    Text(task.description, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     task.dueTime?.let {
-                        AssistChip(
-                            onClick = {},
-                            label = { Text(it.format(DateTimeFormatter.ofPattern("HH:mm"))) },
-                            leadingIcon = { Icon(Icons.Default.Schedule, null, Modifier.size(14.dp)) }
-                        )
+                        AssistChip(onClick = {}, label = { Text(it.format(DateTimeFormatter.ofPattern("HH:mm"))) },
+                            leadingIcon = { Icon(Icons.Default.Schedule, null, Modifier.size(14.dp)) })
                     }
                     category?.let {
-                        AssistChip(
-                            onClick = {},
-                            label = { Text(it.name) },
+                        AssistChip(onClick = {}, label = { Text(it.name) },
                             leadingIcon = {
-                                Box(
-                                    Modifier.size(8.dp).clip(CircleShape)
-                                        .background(Color(android.graphics.Color.parseColor(it.colorHex)))
-                                )
-                            }
-                        )
+                                Box(Modifier.size(8.dp).clip(CircleShape)
+                                    .background(Color(android.graphics.Color.parseColor(it.colorHex))))
+                            })
                     }
                     PriorityChip(task.priority)
                 }
             }
-
-            // Actions
             Column {
                 IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Default.Edit, "Edit", modifier = Modifier.size(18.dp))
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Delete, "Delete",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.error)
+                    Icon(Icons.Default.Delete, "Delete", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -285,29 +239,18 @@ fun PriorityChip(priority: Priority) {
         Priority.MEDIUM -> "Medium" to MaterialTheme.colorScheme.primary
         Priority.LOW -> "Low" to MaterialTheme.colorScheme.tertiary
     }
-    SuggestionChip(
-        onClick = {},
-        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-        colors = SuggestionChipDefaults.suggestionChipColors(
-            labelColor = color
-        )
-    )
+    SuggestionChip(onClick = {}, label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+        colors = SuggestionChipDefaults.suggestionChipColors(labelColor = color))
 }
 
 @Composable
 fun EmptyState() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                Icons.Default.CheckCircle,
-                null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.outlineVariant
-            )
+            Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(12.dp))
             Text("No tasks for this day", style = MaterialTheme.typography.titleMedium)
-            Text("Tap + to add one", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Tap + to add one", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -317,6 +260,7 @@ fun EmptyState() {
 fun AddEditTaskSheet(
     task: Task?,
     categories: List<Category>,
+    initialDate: LocalDate,
     onDismiss: () -> Unit,
     onSave: (Task) -> Unit
 ) {
@@ -326,8 +270,13 @@ fun AddEditTaskSheet(
     var recurrence by remember { mutableStateOf(task?.recurrenceType ?: RecurrenceType.NONE) }
     var selectedCategoryId by remember { mutableStateOf(task?.categoryId) }
     var reminderMinutes by remember { mutableStateOf(task?.reminderMinutesBefore) }
-    var dueDate by remember { mutableStateOf(task?.dueDate ?: LocalDate.now()) }
+    var dueDate by remember { mutableStateOf(task?.dueDate ?: initialDate) }
     var dueTime by remember { mutableStateOf(task?.dueTime) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+
+    val dateFormatter = DateTimeFormatter.ofPattern("EEE, MMM d yyyy")
+    val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -337,121 +286,100 @@ fun AddEditTaskSheet(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                if (task == null) "New Task" else "Edit Task",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
+            Text(if (task == null) "New Task" else "Edit Task",
+                style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                label = { Text("Task title *") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
+            OutlinedTextField(value = title, onValueChange = { title = it },
+                label = { Text("Task title *") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
 
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("Description (optional)") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 2
-            )
+            OutlinedTextField(value = description, onValueChange = { description = it },
+                label = { Text("Description (optional)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
 
-            // Priority selector
+            // Due date and time
+            Text("Due Date & Time", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.CalendarMonth, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(dueDate.format(dateFormatter), maxLines = 1)
+                }
+                OutlinedButton(onClick = { showTimePicker = true }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.Schedule, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(dueTime?.format(timeFormatter) ?: "No time")
+                }
+            }
+
+            // Priority
             Text("Priority", style = MaterialTheme.typography.labelMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Priority.values().forEach { p ->
-                    FilterChip(
-                        selected = priority == p,
-                        onClick = { priority = p },
-                        label = { Text(p.name.lowercase().replaceFirstChar { it.uppercase() }) }
-                    )
+                    FilterChip(selected = priority == p, onClick = { priority = p },
+                        label = { Text(p.name.lowercase().replaceFirstChar { it.uppercase() }) })
                 }
             }
 
             // Recurrence
             Text("Repeat", style = MaterialTheme.typography.labelMedium)
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RecurrenceType.values().forEach { r ->
-                    FilterChip(
-                        selected = recurrence == r,
-                        onClick = { recurrence = r },
-                        label = { Text(r.name.lowercase().replaceFirstChar { it.uppercase() }) }
-                    )
+                    FilterChip(selected = recurrence == r, onClick = { recurrence = r },
+                        label = { Text(r.name.lowercase().replaceFirstChar { it.uppercase() }) })
                 }
             }
 
             // Reminder
             Text("Reminder", style = MaterialTheme.typography.labelMedium)
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(null, 5, 15, 30, 60).forEach { mins ->
-                    FilterChip(
-                        selected = reminderMinutes == mins,
-                        onClick = { reminderMinutes = mins },
-                        label = { Text(if (mins == null) "None" else "${mins}m before") }
-                    )
+                    FilterChip(selected = reminderMinutes == mins, onClick = { reminderMinutes = mins },
+                        label = { Text(if (mins == null) "None" else "${mins}m before") })
                 }
             }
 
             // Category
             if (categories.isNotEmpty()) {
                 Text("Category", style = MaterialTheme.typography.labelMedium)
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = selectedCategoryId == null,
-                        onClick = { selectedCategoryId = null },
-                        label = { Text("None") }
-                    )
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = selectedCategoryId == null, onClick = { selectedCategoryId = null }, label = { Text("None") })
                     categories.forEach { cat ->
-                        FilterChip(
-                            selected = selectedCategoryId == cat.id,
-                            onClick = { selectedCategoryId = cat.id },
-                            label = { Text(cat.name) }
-                        )
+                        FilterChip(selected = selectedCategoryId == cat.id, onClick = { selectedCategoryId = cat.id }, label = { Text(cat.name) })
                     }
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
-                    Text("Cancel")
-                }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Cancel") }
                 Button(
                     onClick = {
                         if (title.isNotBlank()) {
-                            onSave(
-                                (task ?: Task(title = "")).copy(
-                                    title = title,
-                                    description = description,
-                                    priority = priority,
-                                    recurrenceType = recurrence,
-                                    categoryId = selectedCategoryId,
-                                    reminderMinutesBefore = reminderMinutes,
-                                    dueDate = dueDate,
-                                    dueTime = dueTime
-                                )
-                            )
+                            onSave((task ?: Task(title = "")).copy(
+                                title = title, description = description, priority = priority,
+                                recurrenceType = recurrence, categoryId = selectedCategoryId,
+                                reminderMinutesBefore = reminderMinutes, dueDate = dueDate, dueTime = dueTime
+                            ))
                         }
                     },
                     modifier = Modifier.weight(1f)
-                ) {
-                    Text("Save")
-                }
+                ) { Text("Save") }
             }
         }
+    }
+
+    if (showDatePicker) {
+        SimpleDatePickerDialog(
+            initial = dueDate,
+            onDismiss = { showDatePicker = false },
+            onConfirm = { dueDate = it; showDatePicker = false }
+        )
+    }
+    if (showTimePicker) {
+        SimpleTimePickerDialog(
+            initial = dueTime,
+            onDismiss = { showTimePicker = false },
+            onConfirm = { dueTime = it; showTimePicker = false },
+            onClear = { dueTime = null; showTimePicker = false }
+        )
     }
 }

@@ -20,9 +20,24 @@ data class Task(
     val status: TaskStatus = TaskStatus.PENDING,
     val recurrenceType: RecurrenceType = RecurrenceType.NONE,
     val categoryId: Long? = null,
-    val reminderMinutesBefore: Int? = null, // null = no reminder
+    val reminderMinutesBefore: Int? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val completedAt: Long? = null
+)
+
+@Entity(tableName = "appointments")
+data class Appointment(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val description: String = "",
+    val startDate: LocalDate,
+    val startTime: LocalTime? = null,
+    val endDate: LocalDate,
+    val endTime: LocalTime? = null,
+    val location: String = "",
+    val colorHex: String = "#6750A4",
+    val reminderMinutesBefore: Int? = null,
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 @Entity(tableName = "categories")

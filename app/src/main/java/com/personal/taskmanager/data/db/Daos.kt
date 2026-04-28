@@ -1,11 +1,11 @@
 package com.personal.taskmanager.data.db
 
 import androidx.room.*
+import com.personal.taskmanager.data.model.Appointment
 import com.personal.taskmanager.data.model.Category
 import com.personal.taskmanager.data.model.Task
 import com.personal.taskmanager.data.model.TaskStatus
 import kotlinx.coroutines.flow.Flow
-import java.time.LocalDate
 
 @Dao
 interface TaskDao {
@@ -38,6 +38,31 @@ interface TaskDao {
 
     @Query("UPDATE tasks SET status = 'OVERDUE' WHERE dueDate < :today AND status = 'PENDING'")
     suspend fun markOverdueTasks(today: String)
+}
+
+@Dao
+interface AppointmentDao {
+    @Query("SELECT * FROM appointments ORDER BY startDate ASC, startTime ASC")
+    fun getAllAppointments(): Flow<List<Appointment>>
+
+    // Get appointments that overlap with a given date
+    @Query("SELECT * FROM appointments WHERE startDate <= :date AND endDate >= :date ORDER BY startTime ASC")
+    fun getAppointmentsForDate(date: String): Flow<List<Appointment>>
+
+    @Query("SELECT * FROM appointments WHERE id = :id")
+    suspend fun getAppointmentById(id: Long): Appointment?
+
+    @Query("SELECT * FROM appointments WHERE reminderMinutesBefore IS NOT NULL")
+    suspend fun getAppointmentsWithReminders(): List<Appointment>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAppointment(appointment: Appointment): Long
+
+    @Update
+    suspend fun updateAppointment(appointment: Appointment)
+
+    @Delete
+    suspend fun deleteAppointment(appointment: Appointment)
 }
 
 @Dao
