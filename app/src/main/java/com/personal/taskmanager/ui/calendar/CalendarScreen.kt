@@ -9,6 +9,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBackIosNew
+import androidx.compose.material.icons.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,6 +33,7 @@ import com.personal.taskmanager.ui.tasks.TasksViewModel
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,12 +42,18 @@ fun CalendarScreen(
     viewModel: TasksViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    val currentMonth = remember { YearMonth.now() }
     val calendarState = rememberCalendarState(
-        startMonth = YearMonth.now().minusMonths(6),
-        endMonth = YearMonth.now().plusMonths(12),
-        firstVisibleMonth = YearMonth.now(),
+        startMonth = currentMonth.minusMonths(120),
+        endMonth = currentMonth.plusMonths(120),
+        firstVisibleMonth = currentMonth,
         firstDayOfWeek = firstDayOfWeekFromLocale()
     )
+    val coroutineScope = rememberCoroutineScope()
+    val visibleMonth = calendarState.firstVisibleMonth.yearMonth
+
+    // Year picker dialog state
+    var showYearPicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -59,17 +68,49 @@ fun CalendarScreen(
         }
     ) { padding ->
         Column(Modifier.padding(padding)) {
-            // Month header
-            val visibleMonth = calendarState.firstVisibleMonth.yearMonth
-            Text(
-                visibleMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
+
+            // Month/Year navigation header
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                IconButton(onClick = {
+                    coroutineScope.launch {
+                        calendarState.animateScrollToMonth(visibleMonth.minusMonths(1))
+                    }
+                }) {
+                    Icon(Icons.Default.ArrowBackIosNew, "Previous month")
+                }
+
+                // Tappable month/year label — opens year picker
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable { showYearPicker = true }
+                ) {
+                    Text(
+                        visibleMonth.format(DateTimeFormatter.ofPattern("MMMM")),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        visibleMonth.year.toString(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                IconButton(onClick = {
+                    coroutineScope.launch {
+                        calendarState.animateScrollToMonth(visibleMonth.plusMonths(1))
+                    }
+                }) {
+                    Icon(Icons.Default.ArrowForwardIos, "Next month")
+                }
+            }
 
             // Day of week headers
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
@@ -87,7 +128,6 @@ fun CalendarScreen(
             HorizontalCalendar(
                 state = calendarState,
                 dayContent = { day ->
-                    // Count tasks for this day — simplified: use all tasks list
                     val hasTasks = state.tasks.any { it.dueDate == day.date }
                     val hasOverdue = state.tasks.any {
                         it.dueDate == day.date && it.status == TaskStatus.OVERDUE
@@ -109,7 +149,6 @@ fun CalendarScreen(
 
             Divider(Modifier.padding(vertical = 8.dp))
 
-            // Tasks for selected date
             Text(
                 state.selectedDate.format(DateTimeFormatter.ofPattern("EEEE, MMMM d")),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -135,6 +174,42 @@ fun CalendarScreen(
                 }
             }
         }
+    }
+
+    // Year picker dialog
+    if (showYearPicker) {
+        val years = (currentMonth.year - 10..currentMonth.year + 10).toList()
+        AlertDialog(
+            onDismissRequest = { showYearPicker = false },
+            title = { Text("Jump to year") },
+            text = {
+                LazyColumn {
+                    items(years) { year ->
+                        Text(
+                            year.toString(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    coroutineScope.launch {
+                                        calendarState.animateScrollToMonth(
+                                            YearMonth.of(year, visibleMonth.month)
+                                        )
+                                    }
+                                    showYearPicker = false
+                                }
+                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (year == visibleMonth.year) FontWeight.Bold else FontWeight.Normal,
+                            color = if (year == visibleMonth.year) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showYearPicker = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 
