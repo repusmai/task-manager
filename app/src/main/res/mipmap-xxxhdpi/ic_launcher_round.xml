@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1E88E5"/>
+      <stop offset="100%" style="stop-color:#1565C0"/>
+    </linearGradient>
+  </defs>
+  <!-- Background rounded rect -->
+  <rect width="192" height="192" rx="42" fill="url(#bg)"/>
+  <!-- Clipboard body -->
+  <rect x="42" y="53" width="107" height="99" rx="11" fill="white" opacity="0.95"/>
+  <!-- Clipboard top clip -->
+  <rect x="69" y="34" width="53" height="30" rx="7" fill="white" opacity="0.95"/>
+  <!-- Check line 1 -->
+  <line x1="63" y1="86" x2="86" y2="109" stroke="#1565C0" stroke-width="9" stroke-linecap="round"/>
+  <line x1="86" y1="109" x2="119" y2="76" stroke="#1565C0" stroke-width="9" stroke-linecap="round"/>
+  <!-- Task line 2 -->
+  <line x1="63" y1="126" x2="128" y2="126" stroke="#1565C0" stroke-width="7" stroke-linecap="round" opacity="0.5"/>
+</svg>

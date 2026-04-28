@@ -7,6 +7,7 @@ import androidx.navigation.compose.rememberNavController
 import com.personal.taskmanager.ui.calendar.CalendarScreen
 import com.personal.taskmanager.ui.settings.SettingsScreen
 import com.personal.taskmanager.ui.tasks.TasksScreen
+import com.personal.taskmanager.ui.theme.ThemeViewModel
 
 object Routes {
     const val TASKS = "tasks"
@@ -15,7 +16,7 @@ object Routes {
 }
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(themeViewModel: ThemeViewModel) {
     val navController = rememberNavController()
     NavHost(navController, startDestination = Routes.TASKS) {
         composable(Routes.TASKS) {
@@ -25,13 +26,12 @@ fun AppNavigation() {
             )
         }
         composable(Routes.CALENDAR) {
-            CalendarScreen(
-                onNavigateBack = { navController.popBackStack() }
-            )
+            CalendarScreen(onNavigateBack = { navController.popBackStack() })
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                themeViewModel = themeViewModel
             )
         }
     }

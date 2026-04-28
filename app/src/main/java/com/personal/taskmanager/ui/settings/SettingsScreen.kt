@@ -1,8 +1,13 @@
 package com.personal.taskmanager.ui.settings
 
 import android.content.Context
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -10,12 +15,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.personal.taskmanager.ui.theme.AppColorway
+import com.personal.taskmanager.ui.theme.ThemeViewModel
 import com.personal.taskmanager.update.UpdateChecker
 import com.personal.taskmanager.update.UpdateInstaller
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -51,7 +60,7 @@ class SettingsViewModel @Inject constructor(
         _updateState.value = UpdateState(isChecking = true)
         val release = updateChecker.getLatestRelease()
         if (release == null) {
-            _updateState.value = UpdateState(message = "Couldn't check for updates. Check your connection.")
+            _updateState.value = UpdateState(message = "Could not check for updates.")
             return@launch
         }
         val available = updateChecker.isUpdateAvailable(context, release)
@@ -59,7 +68,7 @@ class SettingsViewModel @Inject constructor(
             updateAvailable = available,
             latestVersion = release.tagName,
             apkUrl = release.apkUrl,
-            message = if (!available) "You're on the latest version!" else null
+            message = if (!available) "You are on the latest version!" else null
         )
     }
 
@@ -77,13 +86,34 @@ class SettingsViewModel @Inject constructor(
     }
 }
 
+// Color swatches for each colorway
+private val colorwaySwatches = mapOf(
+    AppColorway.OCEAN_BLUE     to Color(0xFF1565C0),
+    AppColorway.FOREST_GREEN   to Color(0xFF2E7D32),
+    AppColorway.SUNSET_ORANGE  to Color(0xFFE65100),
+    AppColorway.ROSE_PINK      to Color(0xFFC2185B),
+    AppColorway.MIDNIGHT_PURPLE to Color(0xFF4527A0),
+    AppColorway.DYNAMIC        to Color(0xFF888888),
+)
+
+private val colorwayLabels = mapOf(
+    AppColorway.OCEAN_BLUE      to "Ocean Blue",
+    AppColorway.FOREST_GREEN    to "Forest Green",
+    AppColorway.SUNSET_ORANGE   to "Sunset Orange",
+    AppColorway.ROSE_PINK       to "Rose Pink",
+    AppColorway.MIDNIGHT_PURPLE to "Midnight Purple",
+    AppColorway.DYNAMIC         to "Dynamic (System)",
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel()
+    themeViewModel: ThemeViewModel,
+    settingsViewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val updateState by viewModel.updateState.collectAsState()
+    val updateState by settingsViewModel.updateState.collectAsState()
+    val themeState by themeViewModel.themeState.collectAsState()
     val context = LocalContext.current
 
     Scaffold(
@@ -103,19 +133,69 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
         ) {
-            // App info section
-            SettingsSectionHeader("About")
-            SettingsItem(
-                icon = Icons.Default.Info,
-                title = "App Version",
-                subtitle = try {
-                    context.packageManager.getPackageInfo(context.packageName, 0).versionName
-                } catch (e: Exception) { "Unknown" }
+            // ── Appearance ──────────────────────────────────────────────
+            SettingsSectionHeader("Appearance")
+
+            // Dark mode toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.DarkMode, null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Dark Mode", style = MaterialTheme.typography.bodyLarge)
+                    Text("Switch between light and dark",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(
+                    checked = themeState.darkTheme,
+                    onCheckedChange = { themeViewModel.setDarkTheme(it) }
+                )
+            }
+
+            // Colorway picker
+            Text(
+                "Color Theme",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.bodyLarge
             )
 
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Two rows of colorway options
+                val colorways = AppColorway.values().toList()
+                colorways.chunked(3).forEach { rowItems ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        rowItems.forEach { colorway ->
+                            ColorwayChip(
+                                colorway = colorway,
+                                isSelected = themeState.colorway == colorway,
+                                onClick = { themeViewModel.setColorway(colorway) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        // Fill remaining space if row is not full
+                        repeat(3 - rowItems.size) {
+                            Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
             Divider(Modifier.padding(horizontal = 16.dp))
 
-            // Update section
+            // ── Updates ─────────────────────────────────────────────────
             SettingsSectionHeader("Updates")
 
             Card(
@@ -125,49 +205,33 @@ fun SettingsScreen(
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.SystemUpdate,
-                            null,
+                        Icon(Icons.Default.SystemUpdate, null,
                             tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text("Auto-Update", fontWeight = FontWeight.SemiBold)
-                            Text(
-                                "Check GitHub for new versions",
+                            Text("Check GitHub for new versions",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-
                     Spacer(Modifier.height(12.dp))
 
-                    // Status message
-                    updateState.message?.let { msg ->
-                        Text(
-                            msg,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    updateState.message?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
                     }
-
-                    // Update available
                     if (updateState.updateAvailable) {
-                        Text(
-                            "New version available: ${updateState.latestVersion}",
+                        Text("New version: ${updateState.latestVersion}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Medium
-                        )
+                            fontWeight = FontWeight.Medium)
                         Spacer(Modifier.height(8.dp))
                     }
-
-                    // Download progress
                     if (updateState.isDownloading) {
-                        Text(
-                            "Downloading... ${updateState.downloadProgress}%",
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                        Text("Downloading... ${updateState.downloadProgress}%",
+                            style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.height(4.dp))
                         LinearProgressIndicator(
                             progress = updateState.downloadProgress / 100f,
@@ -175,12 +239,10 @@ fun SettingsScreen(
                         )
                         Spacer(Modifier.height(8.dp))
                     }
-
-                    // Action buttons
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (!updateState.updateAvailable && !updateState.isDownloading) {
                             Button(
-                                onClick = viewModel::checkForUpdate,
+                                onClick = settingsViewModel::checkForUpdate,
                                 enabled = !updateState.isChecking,
                                 modifier = Modifier.weight(1f)
                             ) {
@@ -195,16 +257,11 @@ fun SettingsScreen(
                                 }
                             }
                         }
-
                         if (updateState.updateAvailable && !updateState.isDownloading) {
-                            OutlinedButton(
-                                onClick = viewModel::checkForUpdate,
-                                modifier = Modifier.weight(1f)
-                            ) { Text("Re-check") }
-                            Button(
-                                onClick = viewModel::downloadAndInstall,
-                                modifier = Modifier.weight(1f)
-                            ) { Text("Install Update") }
+                            OutlinedButton(onClick = settingsViewModel::checkForUpdate,
+                                modifier = Modifier.weight(1f)) { Text("Re-check") }
+                            Button(onClick = settingsViewModel::downloadAndInstall,
+                                modifier = Modifier.weight(1f)) { Text("Install Update") }
                         }
                     }
                 }
@@ -212,14 +269,58 @@ fun SettingsScreen(
 
             Divider(Modifier.padding(horizontal = 16.dp))
 
-            // Notifications section
-            SettingsSectionHeader("Notifications")
+            // ── About ────────────────────────────────────────────────────
+            SettingsSectionHeader("About")
             SettingsItem(
-                icon = Icons.Default.Notifications,
-                title = "Reminders",
-                subtitle = "Manage in system notification settings"
+                icon = Icons.Default.Info,
+                title = "App Version",
+                subtitle = try {
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                } catch (e: Exception) { "Unknown" }
             )
         }
+    }
+}
+
+@Composable
+fun ColorwayChip(
+    colorway: AppColorway,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val swatch = colorwaySwatches[colorway] ?: Color.Gray
+    val label = colorwayLabels[colorway] ?: colorway.name
+
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .border(
+                width = if (isSelected) 2.dp else 1.dp,
+                color = if (isSelected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clickable(onClick = onClick)
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(swatch)
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
     }
 }
 
