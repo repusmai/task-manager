@@ -173,7 +173,7 @@ fun RoutineCard(
                 }
                 // Active toggle
                 Switch(checked = routine.isActive, onCheckedChange = { onToggleActive() },
-                    modifier = Modifier.scale(0.8f))
+                    )
             }
 
             if (routine.description.isNotBlank()) {
@@ -289,21 +289,17 @@ fun AddEditRoutineSheet(
                 colorOptions.forEach { hex ->
                     val c = try { Color(android.graphics.Color.parseColor(hex)) } catch (e: Exception) { Color.Gray }
                     Box(
-                        modifier = Modifier.size(if (colorHex == hex) 36.dp else 30.dp)
-                            .clip(CircleShape).background(c)
-                            .then(Modifier.wrapContentSize()),
+                        modifier = Modifier
+                            .size(if (colorHex == hex) 36.dp else 30.dp)
+                            .clip(CircleShape)
+                            .background(c)
+                            .clickable { colorHex = hex },
                         contentAlignment = Alignment.Center
                     ) {
                         if (colorHex == hex) {
                             Icon(Icons.Default.Check, null, tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                                    .clip(CircleShape)
-                                    .background(c)
-                                    .padding(2.dp))
+                                modifier = Modifier.size(18.dp))
                         }
-                        Spacer(Modifier.size(if (colorHex == hex) 36.dp else 30.dp)
-                            .clip(CircleShape).background(c)
-                            .then(androidx.compose.ui.Modifier.clickable(onClick = { colorHex = hex })))
                     }
                 }
             }
@@ -480,18 +476,4 @@ fun StepEditor(
     }
 }
 
-// Extension for clickable modifier
-private fun androidx.compose.ui.Modifier.clickable(onClick: () -> Unit) =
-    this.then(androidx.compose.foundation.clickable(onClick = onClick))
 
-private fun androidx.compose.ui.Modifier.scale(scale: Float) =
-    this.then(androidx.compose.ui.layout.layout { measurable, constraints ->
-        val placeable = measurable.measure(constraints)
-        layout(
-            (placeable.width * scale).toInt(),
-            (placeable.height * scale).toInt()
-        ) { placeable.place(
-            -((placeable.width * (1 - scale)) / 2).toInt(),
-            -((placeable.height * (1 - scale)) / 2).toInt()
-        ) }
-    })
