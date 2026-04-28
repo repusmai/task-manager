@@ -16,8 +16,9 @@ import javax.inject.Inject
 
 data class TasksUiState(
     val tasks: List<Task> = emptyList(),
+    val allTasks: List<Task> = emptyList(),
     val categories: List<Category> = emptyList(),
-    val selectedDate: LocalDate = LocalDate.now(),
+    val selectedDate: LocalDate? = null,
     val filterStatus: TaskStatus? = null,
     val isLoading: Boolean = false
 )
@@ -28,29 +29,36 @@ class TasksViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    private val _selectedDate = MutableStateFlow(LocalDate.now())
+    private val _selectedDate = MutableStateFlow<LocalDate?>(null)
     private val _filterStatus = MutableStateFlow<TaskStatus?>(null)
 
     val uiState: StateFlow<TasksUiState> = combine(
-        _selectedDate.flatMapLatest { repository.getTasksForDate(it) },
+        repository.getAllTasks(),
         repository.getAllCategories(),
         _selectedDate,
         _filterStatus
-    ) { tasks, categories, date, filter ->
-        val filtered = if (filter != null) tasks.filter { it.status == filter } else tasks
+    ) { allTasks, categories, date, filter ->
+        val dateFiltered = if (date != null) allTasks.filter { it.dueDate == date } else allTasks
+        val filtered = if (filter != null) dateFiltered.filter { it.status == filter } else dateFiltered
         TasksUiState(
             tasks = filtered.sortedWith(
                 compareBy<Task> { it.status == TaskStatus.COMPLETED }
                     .thenByDescending { it.priority }
+                    .thenBy { it.dueDate }
                     .thenBy { it.dueTime }
             ),
+            allTasks = allTasks,
             categories = categories,
             selectedDate = date,
             filterStatus = filter
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TasksUiState())
 
-    fun selectDate(date: LocalDate) { _selectedDate.value = date }
+    fun selectDate(date: LocalDate) {
+        _selectedDate.value = if (_selectedDate.value == date) null else date
+    }
+
+    fun clearDateFilter() { _selectedDate.value = null }
 
     fun setFilter(status: TaskStatus?) { _filterStatus.value = status }
 

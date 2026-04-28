@@ -477,9 +477,19 @@ fun SimpleDatePickerDialog(
                 if (day > maxDay) day = maxDay
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Day: ", style = MaterialTheme.typography.bodyMedium)
-                    IconButton(onClick = { if (day > 1) day-- }) { Icon(Icons.Default.Remove, null) }
+                    IconButton(onClick = {
+                        if (day > 1) { day-- } else {
+                            if (month > 1) month-- else { month = 12; year-- }
+                            day = java.time.YearMonth.of(year, month).lengthOfMonth()
+                        }
+                    }) { Icon(Icons.Default.Remove, null) }
                     Text("$day", fontWeight = FontWeight.Bold)
-                    IconButton(onClick = { if (day < maxDay) day++ }) { Icon(Icons.Default.Add, null) }
+                    IconButton(onClick = {
+                        if (day < maxDay) { day++ } else {
+                            if (month < 12) month++ else { month = 1; year++ }
+                            day = 1
+                        }
+                    }) { Icon(Icons.Default.Add, null) }
                 }
             }
         },

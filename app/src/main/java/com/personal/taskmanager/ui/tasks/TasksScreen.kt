@@ -3,7 +3,10 @@ package com.personal.taskmanager.ui.tasks
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -16,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.personal.taskmanager.data.model.*
@@ -25,9 +29,10 @@ import com.personal.taskmanager.ui.appointments.SimpleDatePickerDialog
 import com.personal.taskmanager.ui.appointments.SimpleTimePickerDialog
 import com.personal.taskmanager.ui.appointments.AppointmentCard
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 
-// What the FAB "+" expands into
 enum class AddItemType { TASK, APPOINTMENT }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,9 +54,16 @@ fun TasksScreen(
     var appointmentToEdit by remember { mutableStateOf<Appointment?>(null) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    // Keep both ViewModels in sync on date
+    // Keep both ViewModels in sync on date selection
     LaunchedEffect(tasksState.selectedDate) {
-        appointmentsViewModel.selectDate(tasksState.selectedDate)
+        val date = tasksState.selectedDate
+        if (date != null) appointmentsViewModel.selectDate(date)
+        else appointmentsViewModel.clearDateFilter()
+    }
+
+    val topBarTitle = when (tasksState.selectedDate) {
+        null -> "All Items"
+        else -> tasksState.selectedDate!!.format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
     }
 
     Scaffold(
@@ -61,13 +73,21 @@ fun TasksScreen(
                     Column {
                         Text("My Day", fontWeight = FontWeight.Bold)
                         Text(
-                            tasksState.selectedDate.format(DateTimeFormatter.ofPattern("EEEE, MMM d")),
+                            topBarTitle,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
                 actions = {
+                    // Clear date filter button
+                    if (tasksState.selectedDate != null) {
+                        IconButton(onClick = {
+                            tasksViewModel.clearDateFilter()
+                        }) {
+                            Icon(Icons.Default.FilterAltOff, "Show all")
+                        }
+                    }
                     IconButton(onClick = onNavigateToRoutines) {
                         Icon(Icons.Default.Loop, "Routines")
                     }
@@ -89,23 +109,41 @@ fun TasksScreen(
         }
     ) { padding ->
         Column(Modifier.padding(padding)) {
-            DateStrip(selectedDate = tasksState.selectedDate, onDateSelected = tasksViewModel::selectDate)
+            // Date strip — acts as filter, scrolls to latest appointment
+            DateStrip(
+                selectedDate = tasksState.selectedDate,
+                onDateSelected = tasksViewModel::selectDate,
+                taskDates = tasksState.allTasks.mapNotNull { it.dueDate }.toSet(),
+                appointmentDates = appointmentsState.allAppointments
+                    .flatMap { appt ->
+                        generateSequence(appt.startDate) { d ->
+                            if (d < appt.endDate) d.plusDays(1) else null
+                        }.toList()
+                    }.toSet(),
+                latestAppointmentDate = appointmentsState.latestAppointmentDate
+            )
 
-            // Tab selector: Tasks | Appointments
+            // Tab selector
             TabRow(selectedTabIndex = selectedTab) {
-                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 },
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
                     text = { Text("Tasks (${tasksState.tasks.size})") },
-                    icon = { Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(16.dp)) })
-                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 },
+                    icon = { Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(16.dp)) }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
                     text = { Text("Appointments (${appointmentsState.appointments.size})") },
-                    icon = { Icon(Icons.Default.EventNote, null, modifier = Modifier.size(16.dp)) })
+                    icon = { Icon(Icons.Default.EventNote, null, modifier = Modifier.size(16.dp)) }
+                )
             }
 
             when (selectedTab) {
                 0 -> {
                     FilterRow(current = tasksState.filterStatus, onFilter = tasksViewModel::setFilter)
                     if (tasksState.tasks.isEmpty()) {
-                        EmptyState(message = "No tasks for this day", sub = "Tap + to add one")
+                        EmptyState(message = "No tasks", sub = "Tap + to add one")
                     } else {
                         LazyColumn(
                             contentPadding = PaddingValues(16.dp),
@@ -125,7 +163,7 @@ fun TasksScreen(
                 }
                 1 -> {
                     if (appointmentsState.appointments.isEmpty()) {
-                        EmptyState(message = "No appointments for this day", sub = "Tap + to add one")
+                        EmptyState(message = "No appointments", sub = "Tap + to add one")
                     } else {
                         LazyColumn(
                             contentPadding = PaddingValues(16.dp),
@@ -145,7 +183,7 @@ fun TasksScreen(
         }
     }
 
-    // Add selector bottom sheet
+    // Add selector
     if (showAddSelector) {
         ModalBottomSheet(onDismissRequest = { showAddSelector = false }) {
             Column(
@@ -156,54 +194,44 @@ fun TasksScreen(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // Task option
                     Card(
                         modifier = Modifier.weight(1f).clickable {
-                            showAddSelector = false
-                            showAddTask = true
+                            showAddSelector = false; showAddTask = true
                         },
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                     ) {
                         Column(
                             modifier = Modifier.padding(20.dp).fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Default.CheckCircle, null,
-                                modifier = Modifier.size(32.dp),
+                            Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(32.dp),
                                 tint = MaterialTheme.colorScheme.primary)
                             Text("Task", fontWeight = FontWeight.SemiBold)
                             Text("A to-do item with priority and due date",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                textAlign = TextAlign.Center)
                         }
                     }
-                    // Appointment option
                     Card(
                         modifier = Modifier.weight(1f).clickable {
-                            showAddSelector = false
-                            showAddAppointment = true
+                            showAddSelector = false; showAddAppointment = true
                         },
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer
-                        )
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                     ) {
                         Column(
                             modifier = Modifier.padding(20.dp).fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Default.EventNote, null,
-                                modifier = Modifier.size(32.dp),
+                            Icon(Icons.Default.EventNote, null, modifier = Modifier.size(32.dp),
                                 tint = MaterialTheme.colorScheme.secondary)
                             Text("Appointment", fontWeight = FontWeight.SemiBold)
                             Text("A scheduled event with start and end times",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                textAlign = TextAlign.Center)
                         }
                     }
                 }
@@ -211,12 +239,11 @@ fun TasksScreen(
         }
     }
 
-    // Add/Edit Task
     if (showAddTask || taskToEdit != null) {
         AddEditTaskSheet(
             task = taskToEdit,
             categories = tasksState.categories,
-            initialDate = tasksState.selectedDate,
+            initialDate = tasksState.selectedDate ?: LocalDate.now(),
             onDismiss = { showAddTask = false; taskToEdit = null },
             onSave = { task ->
                 if (taskToEdit != null) tasksViewModel.updateTask(task)
@@ -226,11 +253,10 @@ fun TasksScreen(
         )
     }
 
-    // Add/Edit Appointment
     if (showAddAppointment || appointmentToEdit != null) {
         AddEditAppointmentSheet(
             appointment = appointmentToEdit,
-            initialDate = tasksState.selectedDate,
+            initialDate = tasksState.selectedDate ?: LocalDate.now(),
             onDismiss = { showAddAppointment = false; appointmentToEdit = null },
             onSave = { appt ->
                 if (appointmentToEdit != null) appointmentsViewModel.updateAppointment(appt)
@@ -242,40 +268,106 @@ fun TasksScreen(
 }
 
 @Composable
-fun DateStrip(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit) {
+fun DateStrip(
+    selectedDate: LocalDate?,
+    onDateSelected: (LocalDate) -> Unit,
+    taskDates: Set<LocalDate> = emptySet(),
+    appointmentDates: Set<LocalDate> = emptySet(),
+    latestAppointmentDate: LocalDate? = null
+) {
     val today = LocalDate.now()
-    val dates = (-3..10).map { today.plusDays(it.toLong()) }
-    Row(
+
+    // Build date range: from 7 days ago to whichever is further: 30 days ahead or latest appointment + 3
+    val rangeEnd = maxOf(
+        today.plusDays(30),
+        latestAppointmentDate?.plusDays(3) ?: today.plusDays(30)
+    )
+    val rangeStart = today.minusDays(7)
+    val dates = generateSequence(rangeStart) { it.plusDays(1) }
+        .takeWhile { !it.isAfter(rangeEnd) }
+        .toList()
+
+    // Index of today for initial scroll position
+    val todayIndex = dates.indexOf(today).coerceAtLeast(0)
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
+    // Scroll to today on first composition
+    LaunchedEffect(Unit) {
+        listState.scrollToItem(maxOf(0, todayIndex - 2))
+    }
+
+    // When a new appointment is added, scroll to show it
+    LaunchedEffect(latestAppointmentDate) {
+        latestAppointmentDate?.let { latest ->
+            val idx = dates.indexOf(latest)
+            if (idx >= 0) {
+                coroutineScope.launch {
+                    listState.animateScrollToItem(maxOf(0, idx - 2))
+                }
+            }
+        }
+    }
+
+    LazyRow(
+        state = listState,
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
             .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        dates.forEach { date ->
+        items(dates) { date ->
             val isSelected = date == selectedDate
             val isToday = date == today
+            val hasTask = date in taskDates
+            val hasAppointment = date in appointmentDates
+
             Column(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
                     .background(
-                        if (isSelected) MaterialTheme.colorScheme.primary
-                        else if (isToday) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surfaceVariant
+                        when {
+                            isSelected -> MaterialTheme.colorScheme.primary
+                            isToday -> MaterialTheme.colorScheme.primaryContainer
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        }
                     )
                     .clickable { onDateSelected(date) }
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(date.format(DateTimeFormatter.ofPattern("EEE")),
+                Text(
+                    date.format(DateTimeFormatter.ofPattern("EEE")),
                     style = MaterialTheme.typography.labelSmall,
                     color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(date.dayOfMonth.toString(),
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    date.dayOfMonth.toString(),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurface)
+                            else MaterialTheme.colorScheme.onSurface
+                )
+                // Indicator dots — task dot + appointment dot
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (hasTask) {
+                        Box(
+                            Modifier.size(4.dp).clip(CircleShape).background(
+                                if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+                    if (hasAppointment) {
+                        Box(
+                            Modifier.size(4.dp).clip(CircleShape).background(
+                                if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.secondary
+                            )
+                        )
+                    }
+                }
             }
         }
     }
@@ -284,7 +376,9 @@ fun DateStrip(selectedDate: LocalDate, onDateSelected: (LocalDate) -> Unit) {
 @Composable
 fun FilterRow(current: TaskStatus?, onFilter: (TaskStatus?) -> Unit) {
     Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = Modifier
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         FilterChip(selected = current == null, onClick = { onFilter(null) }, label = { Text("All") })
@@ -316,15 +410,19 @@ fun TaskCard(
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(task.title, style = MaterialTheme.typography.bodyLarge,
+                    Text(
+                        task.title,
+                        style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                         textDecoration = if (isCompleted) TextDecoration.LineThrough else null,
                         color = if (isCompleted) MaterialTheme.colorScheme.onSurfaceVariant
-                                else MaterialTheme.colorScheme.onSurface)
+                                else MaterialTheme.colorScheme.onSurface
+                    )
                     if (isOverdue) { Spacer(Modifier.width(6.dp)); Badge { Text("Overdue") } }
                     task.routineId?.let {
                         Spacer(Modifier.width(6.dp))
-                        AssistChip(onClick = {}, label = { Text("Routine", style = MaterialTheme.typography.labelSmall) },
+                        AssistChip(onClick = {},
+                            label = { Text("Routine", style = MaterialTheme.typography.labelSmall) },
                             leadingIcon = { Icon(Icons.Default.Loop, null, Modifier.size(12.dp)) })
                     }
                 }
@@ -333,8 +431,14 @@ fun TaskCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    task.dueDate?.let { date ->
+                        AssistChip(onClick = {},
+                            label = { Text(date.format(DateTimeFormatter.ofPattern("MMM d"))) },
+                            leadingIcon = { Icon(Icons.Default.CalendarMonth, null, Modifier.size(14.dp)) })
+                    }
                     task.dueTime?.let {
-                        AssistChip(onClick = {}, label = { Text(it.format(DateTimeFormatter.ofPattern("HH:mm"))) },
+                        AssistChip(onClick = {},
+                            label = { Text(it.format(DateTimeFormatter.ofPattern("HH:mm"))) },
                             leadingIcon = { Icon(Icons.Default.Schedule, null, Modifier.size(14.dp)) })
                     }
                     category?.let {
@@ -368,7 +472,8 @@ fun PriorityChip(priority: Priority) {
         Priority.MEDIUM -> "Medium" to MaterialTheme.colorScheme.primary
         Priority.LOW -> "Low" to MaterialTheme.colorScheme.tertiary
     }
-    SuggestionChip(onClick = {}, label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+    SuggestionChip(onClick = {},
+        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
         colors = SuggestionChipDefaults.suggestionChipColors(labelColor = color))
 }
 

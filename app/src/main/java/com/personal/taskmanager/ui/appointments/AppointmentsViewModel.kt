@@ -16,7 +16,9 @@ import javax.inject.Inject
 
 data class AppointmentsUiState(
     val appointments: List<Appointment> = emptyList(),
-    val selectedDate: LocalDate = LocalDate.now()
+    val allAppointments: List<Appointment> = emptyList(),
+    val selectedDate: LocalDate? = null,
+    val latestAppointmentDate: LocalDate? = null
 )
 
 @HiltViewModel
@@ -25,17 +27,30 @@ class AppointmentsViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    private val _selectedDate = MutableStateFlow(LocalDate.now())
+    private val _selectedDate = MutableStateFlow<LocalDate?>(null)
 
-    val uiState: StateFlow<AppointmentsUiState> = _selectedDate
-        .flatMapLatest { date ->
-            repository.getAppointmentsForDate(date).map { appointments ->
-                AppointmentsUiState(appointments = appointments, selectedDate = date)
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppointmentsUiState())
+    val uiState: StateFlow<AppointmentsUiState> = combine(
+        repository.getAllAppointments(),
+        _selectedDate
+    ) { allAppointments, date ->
+        val filtered = if (date != null)
+            allAppointments.filter { it.startDate <= date && it.endDate >= date }
+        else
+            allAppointments
+        AppointmentsUiState(
+            appointments = filtered,
+            allAppointments = allAppointments,
+            selectedDate = date,
+            latestAppointmentDate = allAppointments.maxByOrNull { it.startDate }?.startDate
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppointmentsUiState())
 
-    fun selectDate(date: LocalDate) { _selectedDate.value = date }
+    // Toggle: tapping same date again clears filter
+    fun selectDate(date: LocalDate) {
+        _selectedDate.value = if (_selectedDate.value == date) null else date
+    }
+
+    fun clearDateFilter() { _selectedDate.value = null }
 
     fun addAppointment(appointment: Appointment) = viewModelScope.launch {
         val id = repository.addAppointment(appointment)
@@ -44,7 +59,7 @@ class AppointmentsViewModel @Inject constructor(
 
     fun updateAppointment(appointment: Appointment) = viewModelScope.launch {
         repository.updateAppointment(appointment)
-        cancelReminder(context, appointment.id + 100000L) // offset to avoid task ID clash
+        cancelReminder(context, appointment.id + 100000L)
         scheduleAppointmentReminder(context, appointment)
     }
 
