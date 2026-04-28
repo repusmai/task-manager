@@ -286,7 +286,10 @@ fun AddEditRoutineSheet(
 
             // Color
             Text("Color", style = MaterialTheme.typography.labelMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 colorOptions.forEach { hex ->
                     val c = try { Color(android.graphics.Color.parseColor(hex)) } catch (e: Exception) { Color.Gray }
                     Box(
@@ -312,7 +315,10 @@ fun AddEditRoutineSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 dayLabels.forEach { (num, label) ->
                     FilterChip(
                         selected = num in selectedDays,
@@ -320,7 +326,13 @@ fun AddEditRoutineSheet(
                             selectedDays = if (num in selectedDays)
                                 selectedDays - num else selectedDays + num
                         },
-                        label = { Text(label) }
+                        label = {
+                            Text(
+                                label,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     )
                 }
             }
@@ -467,7 +479,7 @@ fun StepEditor(
                             FilterChip(
                                 selected = step.priority == p,
                                 onClick = { onUpdate(step.copy(priority = p)) },
-                                label = { Text(p.name.take(1), style = MaterialTheme.typography.labelSmall) }
+                                label = { Text(p.name.take(1), style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false) }
                             )
                         }
                     }
