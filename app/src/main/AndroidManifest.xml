@@ -17,15 +17,81 @@
         android:theme="@style/Theme.TaskManager"
         android:supportsRtl="true">
 
+        <!-- Main activity (disabled by default — aliases take over) -->
         <activity
             android:name=".MainActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Ocean Blue alias (enabled by default) -->
+        <activity-alias
+            android:name=".MainActivityOceanBlue"
+            android:targetActivity=".MainActivity"
             android:exported="true"
-            android:windowSoftInputMode="adjustResize">
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher_ocean_blue"
+            android:roundIcon="@mipmap/ic_launcher_ocean_blue_round">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <!-- Forest Green alias -->
+        <activity-alias
+            android:name=".MainActivityForestGreen"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:icon="@mipmap/ic_launcher_forest_green"
+            android:roundIcon="@mipmap/ic_launcher_forest_green_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Sunset Orange alias -->
+        <activity-alias
+            android:name=".MainActivitySunsetOrange"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:icon="@mipmap/ic_launcher_sunset_orange"
+            android:roundIcon="@mipmap/ic_launcher_sunset_orange_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Rose Pink alias -->
+        <activity-alias
+            android:name=".MainActivityRosePink"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:icon="@mipmap/ic_launcher_rose_pink"
+            android:roundIcon="@mipmap/ic_launcher_rose_pink_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Midnight Purple alias -->
+        <activity-alias
+            android:name=".MainActivityMidnightPurple"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:icon="@mipmap/ic_launcher_midnight_purple"
+            android:roundIcon="@mipmap/ic_launcher_midnight_purple_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- FileProvider for APK installs -->
         <provider
@@ -38,7 +104,7 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Alarm receiver to restore alarms after reboot -->
+        <!-- Boot receiver -->
         <receiver
             android:name=".notifications.BootReceiver"
             android:exported="true">

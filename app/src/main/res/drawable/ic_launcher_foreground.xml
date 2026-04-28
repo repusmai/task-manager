@@ -4,14 +4,24 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-  <path android:fillColor="#FFFFFF"
-        android:pathData="M38,34 h32 a4,4 0 0 1 4,4 v36 a4,4 0 0 1 -4,4 h-32 a4,4 0 0 1 -4,-4 v-36 a4,4 0 0 1 4,-4 z"/>
-  <path android:fillColor="#FFFFFF"
-        android:pathData="M44,28 h20 a2,2 0 0 1 2,2 v8 h-24 v-8 a2,2 0 0 1 2,-2 z"/>
-  <path android:strokeColor="#1565C0" android:strokeWidth="5"
-        android:strokeLineCap="round" android:fillColor="#00000000"
-        android:pathData="M38,55 l8,9 l14,-16"/>
-  <path android:strokeColor="#1565C0" android:strokeWidth="4"
-        android:strokeLineCap="round" android:fillColor="#00000000"
-        android:pathData="M38,72 h32" android:strokeAlpha="0.4"/>
+
+  <!-- Clipboard body - centered in 108x108 safe zone (within 72x72 center) -->
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="M36,30 h36 a5,5 0 0 1 5,5 v38 a5,5 0 0 1 -5,5 h-36 a5,5 0 0 1 -5,-5 v-38 a5,5 0 0 1 5,-5 z"/>
+
+  <!-- Clipboard top clip tab - centered -->
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="M44,24 h20 a3,3 0 0 1 3,3 v8 h-26 v-8 a3,3 0 0 1 3,-3 z"/>
+
+  <!-- Checkmark - precisely centered in clipboard body -->
+  <!-- Body center Y = 30 + (38/2) + 5 = 54, center X = 54 -->
+  <path
+      android:strokeColor="#1565C0"
+      android:strokeWidth="5"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"
+      android:fillColor="#00000000"
+      android:pathData="M40,54 l8,9 l20,-18"/>
 </vector>

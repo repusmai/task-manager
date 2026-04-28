@@ -5,15 +5,10 @@
       <stop offset="100%" style="stop-color:#1565C0"/>
     </linearGradient>
   </defs>
-  <!-- Background rounded rect -->
   <rect width="96" height="96" rx="21" fill="url(#bg)"/>
-  <!-- Clipboard body -->
-  <rect x="21" y="26" width="53" height="49" rx="5" fill="white" opacity="0.95"/>
-  <!-- Clipboard top clip -->
-  <rect x="34" y="17" width="26" height="15" rx="3" fill="white" opacity="0.95"/>
-  <!-- Check line 1 -->
-  <line x1="31" y1="43" x2="43" y2="54" stroke="#1565C0" stroke-width="4" stroke-linecap="round"/>
-  <line x1="43" y1="54" x2="59" y2="38" stroke="#1565C0" stroke-width="4" stroke-linecap="round"/>
-  <!-- Task line 2 -->
-  <line x1="31" y1="63" x2="64" y2="63" stroke="#1565C0" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+  <rect x="31" y="26" width="32" height="42" rx="4" fill="white" opacity="0.95"/>
+  <rect x="39" y="17" width="17" height="13" rx="2" fill="white" opacity="0.95"/>
+  <polyline points="37,50 47,59 62,41"
+    fill="none" stroke="#1565C0" stroke-width="5"
+    stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

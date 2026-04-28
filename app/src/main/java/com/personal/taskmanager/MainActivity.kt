@@ -1,7 +1,8 @@
 package com.personal.taskmanager
 
-import android.Manifest
+import android.content.ComponentName
 import android.content.pm.PackageManager
+import android.Manifest
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.personal.taskmanager.notifications.createNotificationChannel
 import com.personal.taskmanager.ui.AppNavigation
+import com.personal.taskmanager.ui.theme.AppColorway
 import com.personal.taskmanager.ui.theme.TaskManagerTheme
 import com.personal.taskmanager.ui.theme.ThemeViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -37,6 +39,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val themeState by themeViewModel.themeState.collectAsState()
+
+            // Switch icon color whenever colorway changes
+            updateIconColor(themeState.colorway)
+
             TaskManagerTheme(
                 darkTheme = themeState.darkTheme,
                 colorway = themeState.colorway
@@ -47,6 +53,44 @@ class MainActivity : ComponentActivity() {
                 ) {
                     AppNavigation(themeViewModel = themeViewModel)
                 }
+            }
+        }
+    }
+
+    private fun updateIconColor(colorway: AppColorway) {
+        // All alias component names defined in AndroidManifest
+        val allAliases = listOf(
+            "MainActivityOceanBlue",
+            "MainActivityForestGreen",
+            "MainActivitySunsetOrange",
+            "MainActivityRosePink",
+            "MainActivityMidnightPurple",
+            "MainActivityDynamic"
+        )
+
+        val activeAlias = when (colorway) {
+            AppColorway.OCEAN_BLUE      -> "MainActivityOceanBlue"
+            AppColorway.FOREST_GREEN    -> "MainActivityForestGreen"
+            AppColorway.SUNSET_ORANGE   -> "MainActivitySunsetOrange"
+            AppColorway.ROSE_PINK       -> "MainActivityRosePink"
+            AppColorway.MIDNIGHT_PURPLE -> "MainActivityMidnightPurple"
+            AppColorway.DYNAMIC         -> "MainActivityOceanBlue"
+        }
+
+        val pm = packageManager
+        allAliases.forEach { alias ->
+            val state = if (alias == activeAlias)
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            else
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            try {
+                pm.setComponentEnabledSetting(
+                    ComponentName(this, "com.personal.taskmanager.$alias"),
+                    state,
+                    PackageManager.DONT_KILL_APP
+                )
+            } catch (e: Exception) {
+                // alias not declared yet, skip
             }
         }
     }
