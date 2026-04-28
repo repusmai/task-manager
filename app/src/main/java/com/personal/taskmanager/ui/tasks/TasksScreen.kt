@@ -28,6 +28,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun TasksScreen(
     onNavigateToCalendar: () -> Unit,
+    onNavigateToSettings: () -> Unit,
     viewModel: TasksViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -50,6 +51,9 @@ fun TasksScreen(
                 actions = {
                     IconButton(onClick = onNavigateToCalendar) {
                         Icon(Icons.Default.CalendarMonth, "Calendar")
+                    }
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(Icons.Default.Settings, "Settings")
                     }
                 }
             )
