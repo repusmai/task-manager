@@ -54,13 +54,6 @@ fun TasksScreen(
     var showTaskSortSheet by remember { mutableStateOf(false) }
     var showApptSortSheet by remember { mutableStateOf(false) }
 
-    LaunchedEffect(tasksState.selectedDates) {
-        // Sync date selection to appointments
-        val dates = tasksState.selectedDates
-        if (dates.isEmpty()) appointmentsViewModel.clearDateFilter()
-        else dates.forEach { appointmentsViewModel.toggleDate(it) }
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -167,14 +160,25 @@ fun TasksScreen(
                             onClear = { appointmentsViewModel.setSortOrder(AppointmentSortOrder.DATE_ASC) }
                         )
                     }
-                    if (appointmentsState.appointments.isEmpty()) {
+                    val filteredAppts = appointmentsState.appointments.filter { appt ->
+                        tasksState.selectedDates.isEmpty() ||
+                        tasksState.selectedDates.any { d -> appt.startDate <= d && appt.endDate >= d }
+                    }.let { list ->
+                        when (appointmentsState.sortOrder) {
+                            AppointmentSortOrder.DATE_ASC -> list.sortedBy { it.startDate }
+                            AppointmentSortOrder.DATE_DESC -> list.sortedByDescending { it.startDate }
+                            AppointmentSortOrder.TITLE_AZ -> list.sortedBy { it.title.lowercase() }
+                            AppointmentSortOrder.DURATION -> list.sortedByDescending { it.endDate.toEpochDay() - it.startDate.toEpochDay() }
+                        }
+                    }
+                    if (filteredAppts.isEmpty()) {
                         EmptyState("No appointments", "Tap + to add one")
                     } else {
                         LazyColumn(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            items(appointmentsState.appointments, key = { it.id }) { appt ->
+                            items(filteredAppts, key = { it.id }) { appt ->
                                 AppointmentCard(
                                     appointment = appt,
                                     onEdit = { appointmentToEdit = appt },
