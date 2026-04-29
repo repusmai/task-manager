@@ -100,7 +100,7 @@ fun AppointmentsScreen(
     if (showAddSheet || appointmentToEdit != null) {
         AddEditAppointmentSheet(
             appointment = appointmentToEdit,
-            initialDate = state.selectedDate,
+            initialDate = state.selectedDate ?: java.time.LocalDate.now(),
             onDismiss = { showAddSheet = false; appointmentToEdit = null },
             onSave = { appt ->
                 if (appointmentToEdit != null) viewModel.updateAppointment(appt)
