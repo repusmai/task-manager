@@ -94,12 +94,12 @@ fun CalendarScreen(
                     }
                     CalendarDayCell(
                         day = day,
-                        isSelected = day.date == state.selectedDate,
+                        isSelected = day.date in state.selectedDates,
                         hasTasks = hasTasks,
                         hasOverdue = hasOverdue,
                         onClick = {
                             if (day.position == DayPosition.MonthDate) {
-                                viewModel.selectDate(day.date)
+                                viewModel.toggleDate(day.date)
                                 onNavigateBack()
                             }
                         }
@@ -111,7 +111,7 @@ fun CalendarScreen(
 
             // Tasks for selected date
             Text(
-                (state.selectedDate ?: java.time.LocalDate.now()).format(DateTimeFormatter.ofPattern("EEEE, MMMM d")),
+                (state.selectedDates.minOrNull() ?: java.time.LocalDate.now()).format(DateTimeFormatter.ofPattern("EEEE, MMMM d")),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold

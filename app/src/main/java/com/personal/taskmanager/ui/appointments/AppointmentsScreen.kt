@@ -57,8 +57,8 @@ fun AppointmentsScreen(
     ) { padding ->
         Column(Modifier.padding(padding)) {
             DateStrip(
-                selectedDate = state.selectedDate,
-                onDateSelected = viewModel::selectDate
+                selectedDates = state.selectedDates,
+                onDateToggled = viewModel::toggleDate
             )
 
             if (state.appointments.isEmpty()) {
@@ -100,7 +100,7 @@ fun AppointmentsScreen(
     if (showAddSheet || appointmentToEdit != null) {
         AddEditAppointmentSheet(
             appointment = appointmentToEdit,
-            initialDate = state.selectedDate ?: java.time.LocalDate.now(),
+            initialDate = state.selectedDates.minOrNull() ?: java.time.LocalDate.now(),
             onDismiss = { showAddSheet = false; appointmentToEdit = null },
             onSave = { appt ->
                 if (appointmentToEdit != null) viewModel.updateAppointment(appt)
