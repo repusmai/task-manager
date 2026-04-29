@@ -33,6 +33,9 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 
+// What content types are shown — multi-selectable
+enum class ContentFilter { TASKS, APPOINTMENTS }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TasksScreen(
@@ -45,14 +48,33 @@ fun TasksScreen(
     val tasksState by tasksViewModel.uiState.collectAsState()
     val appointmentsState by appointmentsViewModel.uiState.collectAsState()
 
+    // Multi-select content filter — both selected by default = show everything
+    var contentFilters by remember { mutableStateOf(setOf(ContentFilter.TASKS, ContentFilter.APPOINTMENTS)) }
+
     var showAddSelector by remember { mutableStateOf(false) }
     var showAddTask by remember { mutableStateOf(false) }
     var showAddAppointment by remember { mutableStateOf(false) }
     var taskToEdit by remember { mutableStateOf<Task?>(null) }
     var appointmentToEdit by remember { mutableStateOf<Appointment?>(null) }
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var showTaskSortSheet by remember { mutableStateOf(false) }
-    var showApptSortSheet by remember { mutableStateOf(false) }
+    var showSortSheet by remember { mutableStateOf(false) }
+
+    val showTasks = ContentFilter.TASKS in contentFilters
+    val showAppointments = ContentFilter.APPOINTMENTS in contentFilters
+
+    // Filtered appointments based on selected dates
+    val filteredAppts = appointmentsState.allAppointments.filter { appt ->
+        tasksState.selectedDates.isEmpty() ||
+        tasksState.selectedDates.any { d -> appt.startDate <= d && appt.endDate >= d }
+    }.let { list ->
+        when (appointmentsState.sortOrder) {
+            AppointmentSortOrder.DATE_ASC -> list.sortedBy { it.startDate }
+            AppointmentSortOrder.DATE_DESC -> list.sortedByDescending { it.startDate }
+            AppointmentSortOrder.TITLE_AZ -> list.sortedBy { it.title.lowercase() }
+            AppointmentSortOrder.DURATION -> list.sortedByDescending {
+                it.endDate.toEpochDay() - it.startDate.toEpochDay()
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -63,7 +85,8 @@ fun TasksScreen(
                         Text(
                             when {
                                 tasksState.selectedDates.isEmpty() -> "All Items"
-                                tasksState.selectedDates.size == 1 -> tasksState.selectedDates.first().format(DateTimeFormatter.ofPattern("EEE, MMM d"))
+                                tasksState.selectedDates.size == 1 -> tasksState.selectedDates.first()
+                                    .format(DateTimeFormatter.ofPattern("EEE, MMM d"))
                                 else -> "${tasksState.selectedDates.size} dates selected"
                             },
                             style = MaterialTheme.typography.bodySmall,
@@ -73,9 +96,13 @@ fun TasksScreen(
                 },
                 actions = {
                     if (tasksState.selectedDates.isNotEmpty() || tasksState.filterStatuses.isNotEmpty()) {
-                        IconButton(onClick = { tasksViewModel.clearDateFilter(); tasksViewModel.clearStatusFilter() }) {
-                            Icon(Icons.Default.FilterAltOff, "Show all")
-                        }
+                        IconButton(onClick = {
+                            tasksViewModel.clearDateFilter()
+                            tasksViewModel.clearStatusFilter()
+                        }) { Icon(Icons.Default.FilterAltOff, "Clear filters") }
+                    }
+                    IconButton(onClick = { showSortSheet = true }) {
+                        Icon(Icons.Default.Sort, "Sort")
                     }
                     IconButton(onClick = onNavigateToRoutines) { Icon(Icons.Default.Loop, "Routines") }
                     IconButton(onClick = onNavigateToCalendar) { Icon(Icons.Default.CalendarMonth, "Calendar") }
@@ -92,6 +119,8 @@ fun TasksScreen(
         }
     ) { padding ->
         Column(Modifier.padding(padding)) {
+
+            // Date strip
             DateStrip(
                 selectedDates = tasksState.selectedDates,
                 onDateToggled = tasksViewModel::toggleDate,
@@ -104,89 +133,92 @@ fun TasksScreen(
                 latestAppointmentDate = appointmentsState.latestAppointmentDate
             )
 
-            // Pre-compute filtered appointments — plain val, recomputes on every recomposition
-            val filteredAppts = appointmentsState.allAppointments.filter { appt ->
-                tasksState.selectedDates.isEmpty() ||
-                tasksState.selectedDates.any { d -> appt.startDate <= d && appt.endDate >= d }
-            }.let { list ->
-                when (appointmentsState.sortOrder) {
-                    AppointmentSortOrder.DATE_ASC -> list.sortedBy { it.startDate }
-                    AppointmentSortOrder.DATE_DESC -> list.sortedByDescending { it.startDate }
-                    AppointmentSortOrder.TITLE_AZ -> list.sortedBy { it.title.lowercase() }
-                    AppointmentSortOrder.DURATION -> list.sortedByDescending { it.endDate.toEpochDay() - it.startDate.toEpochDay() }
-                }
+            // Content type filter chips — multi-select
+            Row(
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // "All" chip
+                FilterChip(
+                    selected = contentFilters.size == ContentFilter.values().size,
+                    onClick = {
+                        contentFilters = ContentFilter.values().toSet()
+                    },
+                    label = { Text("All") },
+                    leadingIcon = { Icon(Icons.Default.SelectAll, null, Modifier.size(16.dp)) }
+                )
+                FilterChip(
+                    selected = ContentFilter.TASKS in contentFilters,
+                    onClick = {
+                        contentFilters = if (ContentFilter.TASKS in contentFilters && contentFilters.size > 1)
+                            contentFilters - ContentFilter.TASKS
+                        else contentFilters + ContentFilter.TASKS
+                    },
+                    label = { Text("Tasks (${tasksState.tasks.size})") },
+                    leadingIcon = { Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp)) }
+                )
+                FilterChip(
+                    selected = ContentFilter.APPOINTMENTS in contentFilters,
+                    onClick = {
+                        contentFilters = if (ContentFilter.APPOINTMENTS in contentFilters && contentFilters.size > 1)
+                            contentFilters - ContentFilter.APPOINTMENTS
+                        else contentFilters + ContentFilter.APPOINTMENTS
+                    },
+                    label = { Text("Appointments (${filteredAppts.size})") },
+                    leadingIcon = { Icon(Icons.Default.EventNote, null, Modifier.size(16.dp)) }
+                )
             }
 
-            // Tab row with filter/sort controls
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TabRow(selectedTabIndex = selectedTab, modifier = Modifier.weight(1f)) {
-                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 },
-                        text = { Text("Tasks (${tasksState.tasks.size})") },
-                        icon = { Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp)) })
-                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 },
-                        text = { Text("Appts (${filteredAppts.size})") },
-                        icon = { Icon(Icons.Default.EventNote, null, Modifier.size(16.dp)) })
-                }
-                IconButton(onClick = {
-                    if (selectedTab == 0) showTaskSortSheet = true
-                    else showApptSortSheet = true
-                }) {
-                    Icon(Icons.Default.Sort, "Sort")
-                }
+            // Status filter chips — only when tasks are shown
+            if (showTasks) {
+                StatusFilterRow(
+                    selected = tasksState.filterStatuses,
+                    onToggle = tasksViewModel::toggleStatus,
+                    onClear = tasksViewModel::clearStatusFilter
+                )
             }
 
-            when (selectedTab) {
-                0 -> {
-                    // Status filter chips
-                    StatusFilterRow(selected = tasksState.filterStatuses, onToggle = tasksViewModel::toggleStatus, onClear = tasksViewModel::clearStatusFilter)
-                    // Active sort indicator
-                    if (tasksState.sortOrder != SortOrder.DATE_ASC) {
-                        SortIndicator(
-                            label = sortOrderLabel(tasksState.sortOrder),
-                            onClear = { tasksViewModel.setSortOrder(SortOrder.DATE_ASC) }
-                        )
-                    }
-                    if (tasksState.tasks.isEmpty()) {
-                        EmptyState("No tasks", "Tap + to add one")
-                    } else {
-                        LazyColumn(
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(tasksState.tasks, key = { it.id }) { task ->
-                                TaskCard(
-                                    task = task,
-                                    categories = tasksState.categories,
-                                    onComplete = { tasksViewModel.markComplete(task) },
-                                    onEdit = { taskToEdit = task },
-                                    onDelete = { tasksViewModel.deleteTask(task) }
-                                )
-                            }
+            // Sort indicator
+            if (tasksState.sortOrder != SortOrder.DATE_ASC) {
+                SortIndicator(
+                    label = sortOrderLabel(tasksState.sortOrder),
+                    onClear = { tasksViewModel.setSortOrder(SortOrder.DATE_ASC) }
+                )
+            }
+
+            // Combined list
+            val isEmpty = (showTasks && tasksState.tasks.isEmpty() || !showTasks) &&
+                          (showAppointments && filteredAppts.isEmpty() || !showAppointments)
+
+            if (!showTasks && !showAppointments) {
+                EmptyState("Nothing selected", "Tap a filter chip above")
+            } else if (isEmpty) {
+                EmptyState("Nothing here", "Tap + to add something")
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (showTasks) {
+                        items(tasksState.tasks, key = { "task_${it.id}" }) { task ->
+                            TaskCard(
+                                task = task,
+                                categories = tasksState.categories,
+                                onComplete = { tasksViewModel.markComplete(task) },
+                                onEdit = { taskToEdit = task },
+                                onDelete = { tasksViewModel.deleteTask(task) }
+                            )
                         }
                     }
-                }
-                1 -> {
-                    // Active sort indicator for appointments
-                    if (appointmentsState.sortOrder != AppointmentSortOrder.DATE_ASC) {
-                        SortIndicator(
-                            label = apptSortOrderLabel(appointmentsState.sortOrder),
-                            onClear = { appointmentsViewModel.setSortOrder(AppointmentSortOrder.DATE_ASC) }
-                        )
-                    }
-                    if (filteredAppts.isEmpty()) {
-                        EmptyState("No appointments", "Tap + to add one")
-                    } else {
-                        LazyColumn(
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(filteredAppts, key = { it.id }) { appt ->
-                                AppointmentCard(
-                                    appointment = appt,
-                                    onEdit = { appointmentToEdit = appt },
-                                    onDelete = { appointmentsViewModel.deleteAppointment(appt) }
-                                )
-                            }
+                    if (showAppointments) {
+                        items(filteredAppts, key = { "appt_${it.id}" }) { appt ->
+                            AppointmentCard(
+                                appointment = appt,
+                                onEdit = { appointmentToEdit = appt },
+                                onDelete = { appointmentsViewModel.deleteAppointment(appt) }
+                            )
                         }
                     }
                 }
@@ -201,14 +233,20 @@ fun TasksScreen(
                 modifier = Modifier.padding(24.dp).padding(bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("What would you like to add?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("What would you like to add?",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Card(modifier = Modifier.weight(1f).clickable { showAddSelector = false; showAddTask = true },
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                    Card(
+                        modifier = Modifier.weight(1f).clickable {
+                            showAddSelector = false; showAddTask = true
+                        },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                    ) {
                         Column(modifier = Modifier.padding(20.dp).fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(32.dp),
+                                tint = MaterialTheme.colorScheme.primary)
                             Text("Task", fontWeight = FontWeight.SemiBold)
                             Text("A to-do item with priority and due date",
                                 style = MaterialTheme.typography.bodySmall,
@@ -216,12 +254,17 @@ fun TasksScreen(
                                 textAlign = TextAlign.Center)
                         }
                     }
-                    Card(modifier = Modifier.weight(1f).clickable { showAddSelector = false; showAddAppointment = true },
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                    Card(
+                        modifier = Modifier.weight(1f).clickable {
+                            showAddSelector = false; showAddAppointment = true
+                        },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                    ) {
                         Column(modifier = Modifier.padding(20.dp).fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Icons.Default.EventNote, null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.secondary)
+                            Icon(Icons.Default.EventNote, null, modifier = Modifier.size(32.dp),
+                                tint = MaterialTheme.colorScheme.secondary)
                             Text("Appointment", fontWeight = FontWeight.SemiBold)
                             Text("A scheduled event with start and end times",
                                 style = MaterialTheme.typography.bodySmall,
@@ -234,38 +277,41 @@ fun TasksScreen(
         }
     }
 
-    // Task sort sheet
-    if (showTaskSortSheet) {
-        ModalBottomSheet(onDismissRequest = { showTaskSortSheet = false }) {
-            SortSheet(
-                title = "Sort Tasks",
-                options = listOf(
+    // Sort sheet
+    if (showSortSheet) {
+        ModalBottomSheet(onDismissRequest = { showSortSheet = false }) {
+            Column(
+                modifier = Modifier.padding(24.dp).padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text("Sort Tasks", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                listOf(
                     SortOrder.DATE_ASC to "Date (Earliest first)",
                     SortOrder.DATE_DESC to "Date (Latest first)",
                     SortOrder.PRIORITY_HIGH to "Priority (Highest first)",
                     SortOrder.PRIORITY_LOW to "Priority (Lowest first)",
                     SortOrder.TITLE_AZ to "Title (A-Z)"
-                ),
-                current = tasksState.sortOrder,
-                onSelect = { tasksViewModel.setSortOrder(it); showTaskSortSheet = false }
-            )
-        }
-    }
-
-    // Appointment sort sheet
-    if (showApptSortSheet) {
-        ModalBottomSheet(onDismissRequest = { showApptSortSheet = false }) {
-            SortSheet(
-                title = "Sort Appointments",
-                options = listOf(
-                    AppointmentSortOrder.DATE_ASC to "Date (Earliest first)",
-                    AppointmentSortOrder.DATE_DESC to "Date (Latest first)",
-                    AppointmentSortOrder.TITLE_AZ to "Title (A-Z)",
-                    AppointmentSortOrder.DURATION to "Duration (Longest first)"
-                ),
-                current = appointmentsState.sortOrder,
-                onSelect = { appointmentsViewModel.setSortOrder(it); showApptSortSheet = false }
-            )
+                ).forEach { (order, label) ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (order == tasksState.sortOrder) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surface
+                            )
+                            .clickable { tasksViewModel.setSortOrder(order); showSortSheet = false }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                        if (order == tasksState.sortOrder) {
+                            Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -297,6 +343,22 @@ fun TasksScreen(
     }
 }
 
+@Composable
+fun SortIndicator(label: String, onClear: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.Sort, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.width(4.dp))
+        Text("Sorted by: $label", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.weight(1f))
+        TextButton(onClick = onClear, contentPadding = PaddingValues(4.dp)) {
+            Text("Reset", style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
 fun sortOrderLabel(order: SortOrder) = when (order) {
     SortOrder.DATE_ASC -> "Date ↑"
     SortOrder.DATE_DESC -> "Date ↓"
@@ -310,63 +372,6 @@ fun apptSortOrderLabel(order: AppointmentSortOrder) = when (order) {
     AppointmentSortOrder.DATE_DESC -> "Date ↓"
     AppointmentSortOrder.TITLE_AZ -> "Title A-Z"
     AppointmentSortOrder.DURATION -> "Duration ↓"
-}
-
-@Composable
-fun <T> SortSheet(
-    title: String,
-    options: List<Pair<T, String>>,
-    current: T,
-    onSelect: (T) -> Unit
-) {
-    Column(
-        modifier = Modifier.padding(24.dp).padding(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        options.forEach { (order, label) ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        if (order == current) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surface
-                    )
-                    .clickable { onSelect(order) }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-                if (order == current) {
-                    Icon(Icons.Default.Check, null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SortIndicator(label: String, onClear: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(Icons.Default.Sort, null, modifier = Modifier.size(14.dp),
-            tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.width(4.dp))
-        Text("Sorted by: $label", style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.weight(1f))
-        TextButton(onClick = onClear, contentPadding = PaddingValues(4.dp)) {
-            Text("Reset", style = MaterialTheme.typography.labelSmall)
-        }
-    }
 }
 
 @Composable
@@ -420,8 +425,7 @@ fun DateStrip(
                     color = if (isSelected) MaterialTheme.colorScheme.onPrimary
                             else MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(date.dayOfMonth.toString(),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                     color = if (isSelected) MaterialTheme.colorScheme.onPrimary
                             else MaterialTheme.colorScheme.onSurface)
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -436,21 +440,12 @@ fun DateStrip(
 }
 
 @Composable
-fun StatusFilterRow(
-    selected: Set<TaskStatus>,
-    onToggle: (TaskStatus) -> Unit,
-    onClear: () -> Unit
-) {
+fun StatusFilterRow(selected: Set<TaskStatus>, onToggle: (TaskStatus) -> Unit, onClear: () -> Unit) {
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // "All" chip clears all filters
-        FilterChip(
-            selected = selected.isEmpty(),
-            onClick = onClear,
-            label = { Text("All") }
-        )
+        FilterChip(selected = selected.isEmpty(), onClick = onClear, label = { Text("All") })
         TaskStatus.values().forEach { status ->
             FilterChip(
                 selected = status in selected,
@@ -517,7 +512,8 @@ fun TaskCard(task: Task, categories: List<Category>, onComplete: () -> Unit, onE
                     Icon(Icons.Default.Edit, "Edit", modifier = Modifier.size(18.dp))
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Delete, "Delete", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
+                    Icon(Icons.Default.Delete, "Delete", modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -539,10 +535,12 @@ fun PriorityChip(priority: Priority) {
 fun EmptyState(message: String = "Nothing here", sub: String = "") {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outlineVariant)
+            Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(12.dp))
             Text(message, style = MaterialTheme.typography.titleMedium)
-            if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (sub.isNotBlank()) Text(sub, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -550,11 +548,8 @@ fun EmptyState(message: String = "Nothing here", sub: String = "") {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditTaskSheet(
-    task: Task?,
-    categories: List<Category>,
-    initialDate: LocalDate,
-    onDismiss: () -> Unit,
-    onSave: (Task) -> Unit
+    task: Task?, categories: List<Category>, initialDate: LocalDate,
+    onDismiss: () -> Unit, onSave: (Task) -> Unit
 ) {
     var title by remember { mutableStateOf(task?.title ?: "") }
     var description by remember { mutableStateOf(task?.description ?: "") }
@@ -621,7 +616,6 @@ fun AddEditTaskSheet(
                 }
             }
 
-            // Recurrence
             Text("Repeat", style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -638,18 +632,14 @@ fun AddEditTaskSheet(
                 }
             }
 
-            // Custom days selector
             if (recurrence == RecurrenceType.CUSTOM_DAYS) {
                 Text("Repeat on days", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     dayLabels.forEach { (num, label) ->
-                        FilterChip(
-                            selected = num in recurrenceDays,
-                            onClick = { recurrenceDays = if (num in recurrenceDays) recurrenceDays - num else recurrenceDays + num },
-                            label = { Text(label, maxLines = 1, softWrap = false) }
-                        )
+                        FilterChip(selected = num in recurrenceDays, onClick = {
+                            recurrenceDays = if (num in recurrenceDays) recurrenceDays - num else recurrenceDays + num
+                        }, label = { Text(label, maxLines = 1, softWrap = false) })
                     }
                 }
                 OutlinedButton(onClick = { showRecurrenceTimePicker = true }, modifier = Modifier.fillMaxWidth()) {
@@ -659,15 +649,13 @@ fun AddEditTaskSheet(
                 }
             }
 
-            // Specific dates selector
             if (recurrence == RecurrenceType.SPECIFIC_DATES) {
                 Text("Repeat on specific dates", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 recurrenceSpecificDates.forEachIndexed { index, date ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(date.format(DateTimeFormatter.ofPattern("EEE, MMM d yyyy")),
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium)
+                            modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                         IconButton(onClick = {
                             recurrenceSpecificDates = recurrenceSpecificDates.toMutableList().also { it.removeAt(index) }
                         }, modifier = Modifier.size(28.dp)) {
