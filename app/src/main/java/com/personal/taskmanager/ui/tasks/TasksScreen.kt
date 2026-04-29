@@ -104,6 +104,21 @@ fun TasksScreen(
                 latestAppointmentDate = appointmentsState.latestAppointmentDate
             )
 
+            // Pre-compute filtered appointments for both count and list
+            val filteredAppts = remember(appointmentsState.appointments, tasksState.selectedDates, appointmentsState.sortOrder) {
+                appointmentsState.appointments.filter { appt ->
+                    tasksState.selectedDates.isEmpty() ||
+                    tasksState.selectedDates.any { d -> appt.startDate <= d && appt.endDate >= d }
+                }.let { list ->
+                    when (appointmentsState.sortOrder) {
+                        AppointmentSortOrder.DATE_ASC -> list.sortedBy { it.startDate }
+                        AppointmentSortOrder.DATE_DESC -> list.sortedByDescending { it.startDate }
+                        AppointmentSortOrder.TITLE_AZ -> list.sortedBy { it.title.lowercase() }
+                        AppointmentSortOrder.DURATION -> list.sortedByDescending { it.endDate.toEpochDay() - it.startDate.toEpochDay() }
+                    }
+                }
+            }
+
             // Tab row with filter/sort controls
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TabRow(selectedTabIndex = selectedTab, modifier = Modifier.weight(1f)) {
@@ -111,7 +126,7 @@ fun TasksScreen(
                         text = { Text("Tasks (${tasksState.tasks.size})") },
                         icon = { Icon(Icons.Default.CheckCircle, null, Modifier.size(16.dp)) })
                     Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 },
-                        text = { Text("Appts (${appointmentsState.appointments.size})") },
+                        text = { Text("Appts (${filteredAppts.size})") },
                         icon = { Icon(Icons.Default.EventNote, null, Modifier.size(16.dp)) })
                 }
                 IconButton(onClick = {
@@ -159,17 +174,6 @@ fun TasksScreen(
                             label = apptSortOrderLabel(appointmentsState.sortOrder),
                             onClear = { appointmentsViewModel.setSortOrder(AppointmentSortOrder.DATE_ASC) }
                         )
-                    }
-                    val filteredAppts = appointmentsState.appointments.filter { appt ->
-                        tasksState.selectedDates.isEmpty() ||
-                        tasksState.selectedDates.any { d -> appt.startDate <= d && appt.endDate >= d }
-                    }.let { list ->
-                        when (appointmentsState.sortOrder) {
-                            AppointmentSortOrder.DATE_ASC -> list.sortedBy { it.startDate }
-                            AppointmentSortOrder.DATE_DESC -> list.sortedByDescending { it.startDate }
-                            AppointmentSortOrder.TITLE_AZ -> list.sortedBy { it.title.lowercase() }
-                            AppointmentSortOrder.DURATION -> list.sortedByDescending { it.endDate.toEpochDay() - it.startDate.toEpochDay() }
-                        }
                     }
                     if (filteredAppts.isEmpty()) {
                         EmptyState("No appointments", "Tap + to add one")

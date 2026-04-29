@@ -120,7 +120,6 @@ fun CalendarScreen(
                         onClick = {
                             if (day.position == DayPosition.MonthDate) {
                                 viewModel.toggleDate(day.date)
-                                onNavigateBack()
                             }
                         }
                     )
