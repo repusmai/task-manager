@@ -61,8 +61,9 @@ data class Routine(
     val name: String,
     val description: String = "",
     val colorHex: String = "#00838F",
-    val scheduledTime: LocalTime? = null,
-    val scheduledDays: String = "",
+    val scheduledTime: LocalTime? = null,       // shared time for all days
+    val scheduledDays: String = "",             // comma-separated day ints e.g. "1,3,5"
+    val perDayTimes: String = "",              // per-day overrides: "1:09:00,3:14:30" (dayNum:HH:mm:ss)
     val isActive: Boolean = true,
     val createdAt: Long = System.currentTimeMillis()
 )

@@ -54,10 +54,11 @@ fun TasksScreen(
     var showTaskSortSheet by remember { mutableStateOf(false) }
     var showApptSortSheet by remember { mutableStateOf(false) }
 
-    LaunchedEffect(tasksState.selectedDate) {
-        val date = tasksState.selectedDate
-        if (date != null) appointmentsViewModel.selectDate(date)
-        else appointmentsViewModel.clearDateFilter()
+    LaunchedEffect(tasksState.selectedDates) {
+        // Sync date selection to appointments
+        val dates = tasksState.selectedDates
+        if (dates.isEmpty()) appointmentsViewModel.clearDateFilter()
+        else dates.forEach { appointmentsViewModel.toggleDate(it) }
     }
 
     Scaffold(
@@ -67,15 +68,19 @@ fun TasksScreen(
                     Column {
                         Text("My Day", fontWeight = FontWeight.Bold)
                         Text(
-                            tasksState.selectedDate?.format(DateTimeFormatter.ofPattern("EEEE, MMM d")) ?: "All Items",
+                            when {
+                                tasksState.selectedDates.isEmpty() -> "All Items"
+                                tasksState.selectedDates.size == 1 -> tasksState.selectedDates.first().format(DateTimeFormatter.ofPattern("EEE, MMM d"))
+                                else -> "${tasksState.selectedDates.size} dates selected"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
                 actions = {
-                    if (tasksState.selectedDate != null) {
-                        IconButton(onClick = { tasksViewModel.clearDateFilter() }) {
+                    if (tasksState.selectedDates.isNotEmpty() || tasksState.filterStatuses.isNotEmpty()) {
+                        IconButton(onClick = { tasksViewModel.clearDateFilter(); tasksViewModel.clearStatusFilter() }) {
                             Icon(Icons.Default.FilterAltOff, "Show all")
                         }
                     }
@@ -95,8 +100,8 @@ fun TasksScreen(
     ) { padding ->
         Column(Modifier.padding(padding)) {
             DateStrip(
-                selectedDate = tasksState.selectedDate,
-                onDateSelected = tasksViewModel::selectDate,
+                selectedDates = tasksState.selectedDates,
+                onDateToggled = tasksViewModel::toggleDate,
                 taskDates = tasksState.allTasks.mapNotNull { it.dueDate }.toSet(),
                 appointmentDates = appointmentsState.allAppointments.flatMap { appt ->
                     generateSequence(appt.startDate) { d ->
@@ -127,7 +132,7 @@ fun TasksScreen(
             when (selectedTab) {
                 0 -> {
                     // Status filter chips
-                    StatusFilterRow(current = tasksState.filterStatus, onFilter = tasksViewModel::setFilter)
+                    StatusFilterRow(selected = tasksState.filterStatuses, onToggle = tasksViewModel::toggleStatus, onClear = tasksViewModel::clearStatusFilter)
                     // Active sort indicator
                     if (tasksState.sortOrder != SortOrder.DATE_ASC) {
                         SortIndicator(
@@ -262,7 +267,7 @@ fun TasksScreen(
         AddEditTaskSheet(
             task = taskToEdit,
             categories = tasksState.categories,
-            initialDate = tasksState.selectedDate ?: LocalDate.now(),
+            initialDate = tasksState.selectedDates.minOrNull() ?: LocalDate.now(),
             onDismiss = { showAddTask = false; taskToEdit = null },
             onSave = { task ->
                 if (taskToEdit != null) tasksViewModel.updateTask(task)
@@ -275,7 +280,7 @@ fun TasksScreen(
     if (showAddAppointment || appointmentToEdit != null) {
         AddEditAppointmentSheet(
             appointment = appointmentToEdit,
-            initialDate = tasksState.selectedDate ?: LocalDate.now(),
+            initialDate = tasksState.selectedDates.minOrNull() ?: LocalDate.now(),
             onDismiss = { showAddAppointment = false; appointmentToEdit = null },
             onSave = { appt ->
                 if (appointmentToEdit != null) appointmentsViewModel.updateAppointment(appt)
@@ -360,8 +365,8 @@ fun SortIndicator(label: String, onClear: () -> Unit) {
 
 @Composable
 fun DateStrip(
-    selectedDate: LocalDate?,
-    onDateSelected: (LocalDate) -> Unit,
+    selectedDates: Set<LocalDate>,
+    onDateToggled: (LocalDate) -> Unit,
     taskDates: Set<LocalDate> = emptySet(),
     appointmentDates: Set<LocalDate> = emptySet(),
     latestAppointmentDate: LocalDate? = null
@@ -388,7 +393,7 @@ fun DateStrip(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(dates) { date ->
-            val isSelected = date == selectedDate
+            val isSelected = date in selectedDates
             val isToday = date == today
             val hasTask = date in taskDates
             val hasAppointment = date in appointmentDates
@@ -400,7 +405,7 @@ fun DateStrip(
                         isToday -> MaterialTheme.colorScheme.primaryContainer
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     })
-                    .clickable { onDateSelected(date) }
+                    .clickable { onDateToggled(date) }
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -425,15 +430,32 @@ fun DateStrip(
 }
 
 @Composable
-fun StatusFilterRow(current: TaskStatus?, onFilter: (TaskStatus?) -> Unit) {
+fun StatusFilterRow(
+    selected: Set<TaskStatus>,
+    onToggle: (TaskStatus) -> Unit,
+    onClear: () -> Unit
+) {
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        FilterChip(selected = current == null, onClick = { onFilter(null) }, label = { Text("All") })
-        FilterChip(selected = current == TaskStatus.PENDING, onClick = { onFilter(TaskStatus.PENDING) }, label = { Text("Pending") })
-        FilterChip(selected = current == TaskStatus.COMPLETED, onClick = { onFilter(TaskStatus.COMPLETED) }, label = { Text("Done") })
-        FilterChip(selected = current == TaskStatus.OVERDUE, onClick = { onFilter(TaskStatus.OVERDUE) }, label = { Text("Overdue") })
+        // "All" chip clears all filters
+        FilterChip(
+            selected = selected.isEmpty(),
+            onClick = onClear,
+            label = { Text("All") }
+        )
+        TaskStatus.values().forEach { status ->
+            FilterChip(
+                selected = status in selected,
+                onClick = { onToggle(status) },
+                label = { Text(when(status) {
+                    TaskStatus.PENDING -> "Pending"
+                    TaskStatus.COMPLETED -> "Done"
+                    TaskStatus.OVERDUE -> "Overdue"
+                }) }
+            )
+        }
     }
 }
 

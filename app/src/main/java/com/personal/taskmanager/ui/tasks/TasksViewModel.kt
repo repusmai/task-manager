@@ -14,16 +14,14 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
 
-enum class SortOrder {
-    DATE_ASC, DATE_DESC, PRIORITY_HIGH, PRIORITY_LOW, TITLE_AZ
-}
+enum class SortOrder { DATE_ASC, DATE_DESC, PRIORITY_HIGH, PRIORITY_LOW, TITLE_AZ }
 
 data class TasksUiState(
     val tasks: List<Task> = emptyList(),
     val allTasks: List<Task> = emptyList(),
     val categories: List<Category> = emptyList(),
-    val selectedDate: LocalDate? = null,
-    val filterStatus: TaskStatus? = null,
+    val selectedDates: Set<LocalDate> = emptySet(),       // multi-select
+    val filterStatuses: Set<TaskStatus> = emptySet(),     // multi-select
     val sortOrder: SortOrder = SortOrder.DATE_ASC,
     val isLoading: Boolean = false
 )
@@ -34,19 +32,21 @@ class TasksViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    private val _selectedDate = MutableStateFlow<LocalDate?>(null)
-    private val _filterStatus = MutableStateFlow<TaskStatus?>(null)
+    private val _selectedDates = MutableStateFlow<Set<LocalDate>>(emptySet())
+    private val _filterStatuses = MutableStateFlow<Set<TaskStatus>>(emptySet())
     private val _sortOrder = MutableStateFlow(SortOrder.DATE_ASC)
 
     val uiState: StateFlow<TasksUiState> = combine(
         repository.getAllTasks(),
         repository.getAllCategories(),
-        _selectedDate,
-        _filterStatus,
+        _selectedDates,
+        _filterStatuses,
         _sortOrder
-    ) { allTasks, categories, date, filter, sort ->
-        val dateFiltered = if (date != null) allTasks.filter { it.dueDate == date } else allTasks
-        val statusFiltered = if (filter != null) dateFiltered.filter { it.status == filter } else dateFiltered
+    ) { allTasks, categories, dates, statuses, sort ->
+        val dateFiltered = if (dates.isEmpty()) allTasks
+                           else allTasks.filter { it.dueDate in dates }
+        val statusFiltered = if (statuses.isEmpty()) dateFiltered
+                             else dateFiltered.filter { it.status in statuses }
         val sorted = when (sort) {
             SortOrder.DATE_ASC -> statusFiltered.sortedWith(
                 compareBy<Task> { it.status == TaskStatus.COMPLETED }.thenBy { it.dueDate }.thenBy { it.dueTime })
@@ -60,38 +60,40 @@ class TasksViewModel @Inject constructor(
                 compareBy<Task> { it.status == TaskStatus.COMPLETED }.thenBy { it.title.lowercase() })
         }
         TasksUiState(
-            tasks = sorted,
-            allTasks = allTasks,
-            categories = categories,
-            selectedDate = date,
-            filterStatus = filter,
-            sortOrder = sort
+            tasks = sorted, allTasks = allTasks, categories = categories,
+            selectedDates = dates, filterStatuses = statuses, sortOrder = sort
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TasksUiState())
 
-    fun selectDate(date: LocalDate) {
-        _selectedDate.value = if (_selectedDate.value == date) null else date
+    fun toggleDate(date: LocalDate) {
+        _selectedDates.value = _selectedDates.value.let {
+            if (date in it) it - date else it + date
+        }
     }
-    fun clearDateFilter() { _selectedDate.value = null }
-    fun setFilter(status: TaskStatus?) { _filterStatus.value = status }
+    fun clearDateFilter() { _selectedDates.value = emptySet() }
+
+    fun toggleStatus(status: TaskStatus) {
+        _filterStatuses.value = _filterStatuses.value.let {
+            if (status in it) it - status else it + status
+        }
+    }
+    fun clearStatusFilter() { _filterStatuses.value = emptySet() }
+
     fun setSortOrder(order: SortOrder) { _sortOrder.value = order }
 
     fun addTask(task: Task) = viewModelScope.launch {
         val id = repository.addTask(task)
         scheduleReminder(context, task.copy(id = id))
     }
-
     fun updateTask(task: Task) = viewModelScope.launch {
         repository.updateTask(task)
         cancelReminder(context, task.id)
         scheduleReminder(context, task)
     }
-
     fun deleteTask(task: Task) = viewModelScope.launch {
         cancelReminder(context, task.id)
         repository.deleteTask(task)
     }
-
     fun markComplete(task: Task) = viewModelScope.launch {
         cancelReminder(context, task.id)
         repository.markComplete(task.id)
@@ -109,7 +111,6 @@ class TasksViewModel @Inject constructor(
             }
         }
     }
-
     fun addCategory(name: String, colorHex: String) = viewModelScope.launch {
         repository.addCategory(Category(name = name, colorHex = colorHex))
     }

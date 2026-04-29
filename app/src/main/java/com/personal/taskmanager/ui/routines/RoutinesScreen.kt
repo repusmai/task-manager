@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -139,12 +140,29 @@ fun RoutineCard(
     var expanded by remember { mutableStateOf(false) }
 
     val scheduleDays = routine.scheduledDays.split(",").mapNotNull { it.trim().toIntOrNull() }
+    val perDayMap = routine.perDayTimes.split(",").mapNotNull { entry ->
+        val parts = entry.trim().split(":")
+        if (parts.size >= 4) {
+            val day = parts[0].toIntOrNull()
+            val time = runCatching { LocalTime.of(parts[1].toInt(), parts[2].toInt(), parts[3].toInt()) }.getOrNull()
+            if (day != null && time != null) day to time else null
+        } else null
+    }.toMap()
     val scheduleText = buildString {
         if (scheduleDays.isNotEmpty()) {
-            append(scheduleDays.joinToString(", ") {
-                DayOfWeek.of(it).getDisplayName(TextStyle.SHORT, Locale.getDefault())
-            })
-            routine.scheduledTime?.let { append(" at ${it.format(DateTimeFormatter.ofPattern("HH:mm"))}") }
+            if (perDayMap.isNotEmpty()) {
+                // Per-day times
+                append(scheduleDays.joinToString(", ") { day ->
+                    val abbr = DayOfWeek.of(day).getDisplayName(TextStyle.SHORT, Locale.getDefault())
+                    val time = perDayMap[day]?.format(DateTimeFormatter.ofPattern("HH:mm"))
+                    if (time != null) "$abbr $time" else abbr
+                })
+            } else {
+                append(scheduleDays.joinToString(", ") {
+                    DayOfWeek.of(it).getDisplayName(TextStyle.SHORT, Locale.getDefault())
+                })
+                routine.scheduledTime?.let { append(" at ${it.format(DateTimeFormatter.ofPattern("HH:mm"))}") }
+            }
         } else {
             append("Manual only")
         }
@@ -252,11 +270,26 @@ fun AddEditRoutineSheet(
     var description by remember { mutableStateOf(routine?.description ?: "") }
     var colorHex by remember { mutableStateOf(routine?.colorHex ?: "#00838F") }
     var scheduledTime by remember { mutableStateOf(routine?.scheduledTime) }
+    var useSharedTime by remember { mutableStateOf(true) }
     var selectedDays by remember {
         mutableStateOf(
             routine?.scheduledDays?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.toSet() ?: emptySet()
         )
     }
+    // Per-day time overrides: dayNum -> LocalTime
+    val perDayTimes = remember {
+        val map = mutableStateMapOf<Int, LocalTime?>()
+        routine?.perDayTimes?.split(",")?.forEach { entry ->
+            val parts = entry.trim().split(":")
+            if (parts.size >= 4) {
+                val day = parts[0].toIntOrNull()
+                val time = runCatching { LocalTime.of(parts[1].toInt(), parts[2].toInt(), parts[3].toInt()) }.getOrNull()
+                if (day != null) map[day] = time
+            }
+        }
+        map
+    }
+    var showPerDayTimePicker by remember { mutableStateOf<Int?>(null) } // which day
     var steps by remember {
         mutableStateOf(
             routineWithSteps?.steps?.toMutableList() ?: mutableListOf()
@@ -337,18 +370,52 @@ fun AddEditRoutineSheet(
                 }
             }
 
-            // Time picker always visible — shows "Not set" when no days selected
-            OutlinedButton(
-                onClick = { showTimePicker = true },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = selectedDays.isNotEmpty()
-            ) {
-                Icon(Icons.Default.Schedule, null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    if (selectedDays.isEmpty()) "Select days above to set a time"
-                    else scheduledTime?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Set start time (optional)"
-                )
+            if (selectedDays.isNotEmpty()) {
+                // Toggle shared vs per-day times
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Time setting", style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.weight(1f))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(selected = useSharedTime, onClick = { useSharedTime = true },
+                            label = { Text("Same time", maxLines = 1, softWrap = false) })
+                        FilterChip(selected = !useSharedTime, onClick = { useSharedTime = false },
+                            label = { Text("Per day", maxLines = 1, softWrap = false) })
+                    }
+                }
+                if (useSharedTime) {
+                    OutlinedButton(onClick = { showTimePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Schedule, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(scheduledTime?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Set shared time (optional)")
+                    }
+                } else {
+                    // Show a time picker button per selected day
+                    val dayLabels2 = mapOf(1 to "Monday", 2 to "Tuesday", 3 to "Wednesday",
+                        4 to "Thursday", 5 to "Friday", 6 to "Saturday", 7 to "Sunday")
+                    selectedDays.sorted().forEach { dayNum ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(dayLabels2[dayNum] ?: "Day $dayNum",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f))
+                            OutlinedButton(onClick = { showPerDayTimePicker = dayNum }) {
+                                Icon(Icons.Default.Schedule, null, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(perDayTimes[dayNum]?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "No time",
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            } else {
+                OutlinedButton(onClick = {}, modifier = Modifier.fillMaxWidth(), enabled = false) {
+                    Icon(Icons.Default.Schedule, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Select days above to set a time")
+                }
             }
 
             Divider()
@@ -405,8 +472,11 @@ fun AddEditRoutineSheet(
                                     name = name,
                                     description = description,
                                     colorHex = colorHex,
-                                    scheduledTime = if (selectedDays.isEmpty()) null else scheduledTime,
-                                    scheduledDays = selectedDays.sorted().joinToString(",")
+                                    scheduledTime = if (selectedDays.isEmpty() || !useSharedTime) null else scheduledTime,
+                                    scheduledDays = selectedDays.sorted().joinToString(","),
+                                    perDayTimes = if (useSharedTime) "" else
+                                        perDayTimes.entries.filter { it.key in selectedDays && it.value != null }
+                                            .joinToString(",") { (day, time) -> "$day:${time!!.hour}:${time.minute}:${time.second}" }
                                 ),
                                 steps.filter { it.title.isNotBlank() }
                             )
@@ -424,6 +494,14 @@ fun AddEditRoutineSheet(
             onDismiss = { showTimePicker = false },
             onConfirm = { scheduledTime = it; showTimePicker = false },
             onClear = { scheduledTime = null; showTimePicker = false }
+        )
+    }
+    showPerDayTimePicker?.let { dayNum ->
+        SimpleTimePickerDialog(
+            initial = perDayTimes[dayNum],
+            onDismiss = { showPerDayTimePicker = null },
+            onConfirm = { perDayTimes[dayNum] = it; showPerDayTimePicker = null },
+            onClear = { perDayTimes[dayNum] = null; showPerDayTimePicker = null }
         )
     }
 }

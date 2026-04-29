@@ -9,7 +9,7 @@ import com.personal.taskmanager.data.model.*
 
 @Database(
     entities = [Task::class, Appointment::class, Category::class, Routine::class, RoutineStep::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -61,5 +61,11 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE tasks ADD COLUMN recurrenceDays TEXT NOT NULL DEFAULT ''")
         db.execSQL("ALTER TABLE tasks ADD COLUMN recurrenceTime TEXT")
+    }
+}
+
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE routines ADD COLUMN perDayTimes TEXT NOT NULL DEFAULT ''")
     }
 }
