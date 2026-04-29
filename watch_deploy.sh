@@ -1,10 +1,8 @@
 #!/bin/bash
 
-# ── Config ─────────────────────────────────────────────────────────────────
 REPO="repusmai/task-manager"
 TOKEN_FILE="$HOME/.github_deploy_token"
 
-# ── Get token ──────────────────────────────────────────────────────────────
 if [ -f "$TOKEN_FILE" ]; then
     TOKEN=$(cat "$TOKEN_FILE")
 else
@@ -15,13 +13,8 @@ else
 fi
 
 AUTH="Authorization: Bearer $TOKEN"
+gh_api() { curl -s -H "$AUTH" -H "Accept: application/vnd.github+json" "$@"; }
 
-# ── Helper: GitHub API ─────────────────────────────────────────────────────
-gh_api() {
-    curl -s -H "$AUTH" -H "Accept: application/vnd.github+json" "$@"
-}
-
-# ── Step 1: Push ───────────────────────────────────────────────────────────
 echo ""
 echo "┌─────────────────────────────────────────┐"
 echo "│        Task Manager Deploy Tool         │"
@@ -42,14 +35,13 @@ else
     echo "   Watching for any currently running deploy..."
 fi
 
-# ── Step 2: Wait for Actions run to appear ────────────────────────────────
 echo ""
 echo "⏳ Waiting for GitHub Actions to start..."
 
 RUN_ID=""
 ATTEMPTS=0
-while [ -z "$RUN_ID" ] && [ $ATTEMPTS -lt 15 ]; do
-    sleep 4
+while [ -z "$RUN_ID" ] && [ $ATTEMPTS -lt 20 ]; do
+    sleep 2
     ATTEMPTS=$((ATTEMPTS + 1))
     RUN_ID=$(gh_api "https://api.github.com/repos/$REPO/actions/runs?per_page=1&branch=main" \
         | python3 -c "
@@ -73,13 +65,12 @@ echo "🚀 Build started! Run ID: $RUN_ID"
 echo "   https://github.com/$REPO/actions/runs/$RUN_ID"
 echo ""
 
-# ── Step 3: Poll until complete ───────────────────────────────────────────
 SPINNER=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
 SPIN_IDX=0
 START_TIME=$(date +%s)
 
 while true; do
-    sleep 5
+    sleep 2
 
     RESULT=$(gh_api "https://api.github.com/repos/$REPO/actions/runs/$RUN_ID" \
         | python3 -c "
@@ -111,21 +102,14 @@ print(data.get('conclusion', ''))
             echo "│  APK is live on GitHub Releases         │"
             echo "│  Open your app → Settings → Update      │"
             echo "└─────────────────────────────────────────┘"
-
-            # Try to send a desktop notification
-            if command -v notify-send &> /dev/null; then
-                notify-send "Task Manager Deployed ✅" "New APK is live. Open app to update." --icon=dialog-information
-            fi
+            command -v notify-send &>/dev/null && notify-send "Task Manager Deployed ✅" "New APK is live." --icon=dialog-information
         else
             echo "┌─────────────────────────────────────────┐"
-            printf "│  ❌ Build failed (conclusion: %-10s│\n" "${CONCLUSION})"
+            printf "│  ❌ Build failed (%-22s│\n" "${CONCLUSION})"
             echo "│  Check Actions tab for details          │"
             echo "└─────────────────────────────────────────┘"
             echo "   https://github.com/$REPO/actions/runs/$RUN_ID"
-
-            if command -v notify-send &> /dev/null; then
-                notify-send "Task Manager Build Failed ❌" "Check GitHub Actions for details." --icon=dialog-error
-            fi
+            command -v notify-send &>/dev/null && notify-send "Task Manager Build Failed ❌" "Check GitHub Actions." --icon=dialog-error
         fi
         exit 0
     fi

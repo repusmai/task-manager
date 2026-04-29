@@ -104,18 +104,16 @@ fun TasksScreen(
                 latestAppointmentDate = appointmentsState.latestAppointmentDate
             )
 
-            // Pre-compute filtered appointments for both count and list
-            val filteredAppts = remember(appointmentsState.appointments, tasksState.selectedDates, appointmentsState.sortOrder) {
-                appointmentsState.appointments.filter { appt ->
-                    tasksState.selectedDates.isEmpty() ||
-                    tasksState.selectedDates.any { d -> appt.startDate <= d && appt.endDate >= d }
-                }.let { list ->
-                    when (appointmentsState.sortOrder) {
-                        AppointmentSortOrder.DATE_ASC -> list.sortedBy { it.startDate }
-                        AppointmentSortOrder.DATE_DESC -> list.sortedByDescending { it.startDate }
-                        AppointmentSortOrder.TITLE_AZ -> list.sortedBy { it.title.lowercase() }
-                        AppointmentSortOrder.DURATION -> list.sortedByDescending { it.endDate.toEpochDay() - it.startDate.toEpochDay() }
-                    }
+            // Pre-compute filtered appointments — plain val, recomputes on every recomposition
+            val filteredAppts = appointmentsState.allAppointments.filter { appt ->
+                tasksState.selectedDates.isEmpty() ||
+                tasksState.selectedDates.any { d -> appt.startDate <= d && appt.endDate >= d }
+            }.let { list ->
+                when (appointmentsState.sortOrder) {
+                    AppointmentSortOrder.DATE_ASC -> list.sortedBy { it.startDate }
+                    AppointmentSortOrder.DATE_DESC -> list.sortedByDescending { it.startDate }
+                    AppointmentSortOrder.TITLE_AZ -> list.sortedBy { it.title.lowercase() }
+                    AppointmentSortOrder.DURATION -> list.sortedByDescending { it.endDate.toEpochDay() - it.startDate.toEpochDay() }
                 }
             }
 
