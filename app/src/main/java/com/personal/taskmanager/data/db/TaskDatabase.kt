@@ -9,7 +9,7 @@ import com.personal.taskmanager.data.model.*
 
 @Database(
     entities = [Task::class, Appointment::class, Category::class, Routine::class, RoutineStep::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -25,16 +25,10 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS appointments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                title TEXT NOT NULL,
-                description TEXT NOT NULL DEFAULT '',
-                startDate TEXT NOT NULL,
-                startTime TEXT,
-                endDate TEXT NOT NULL,
-                endTime TEXT,
-                location TEXT NOT NULL DEFAULT '',
-                colorHex TEXT NOT NULL DEFAULT '#6750A4',
-                reminderMinutesBefore INTEGER,
-                createdAt INTEGER NOT NULL
+                title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+                startDate TEXT NOT NULL, startTime TEXT, endDate TEXT NOT NULL, endTime TEXT,
+                location TEXT NOT NULL DEFAULT '', colorHex TEXT NOT NULL DEFAULT '#6750A4',
+                reminderMinutesBefore INTEGER, createdAt INTEGER NOT NULL
             )
         """.trimIndent())
     }
@@ -42,34 +36,30 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
 
 val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
-        // Add routineId to tasks
         db.execSQL("ALTER TABLE tasks ADD COLUMN routineId INTEGER")
-
-        // Create routines table
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS routines (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                name TEXT NOT NULL,
-                description TEXT NOT NULL DEFAULT '',
-                colorHex TEXT NOT NULL DEFAULT '#00838F',
-                scheduledTime TEXT,
-                scheduledDays TEXT NOT NULL DEFAULT '',
-                isActive INTEGER NOT NULL DEFAULT 1,
+                name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+                colorHex TEXT NOT NULL DEFAULT '#00838F', scheduledTime TEXT,
+                scheduledDays TEXT NOT NULL DEFAULT '', isActive INTEGER NOT NULL DEFAULT 1,
                 createdAt INTEGER NOT NULL
             )
         """.trimIndent())
-
-        // Create routine_steps table
         db.execSQL("""
             CREATE TABLE IF NOT EXISTS routine_steps (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                routineId INTEGER NOT NULL,
-                title TEXT NOT NULL,
-                description TEXT NOT NULL DEFAULT '',
-                durationMinutes INTEGER,
-                priority TEXT NOT NULL DEFAULT 'MEDIUM',
-                orderIndex INTEGER NOT NULL DEFAULT 0
+                routineId INTEGER NOT NULL, title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '', durationMinutes INTEGER,
+                priority TEXT NOT NULL DEFAULT 'MEDIUM', orderIndex INTEGER NOT NULL DEFAULT 0
             )
         """.trimIndent())
+    }
+}
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE tasks ADD COLUMN recurrenceDays TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE tasks ADD COLUMN recurrenceTime TEXT")
     }
 }

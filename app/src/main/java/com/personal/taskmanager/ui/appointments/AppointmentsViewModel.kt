@@ -14,10 +14,13 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
 
+enum class AppointmentSortOrder { DATE_ASC, DATE_DESC, TITLE_AZ, DURATION }
+
 data class AppointmentsUiState(
     val appointments: List<Appointment> = emptyList(),
     val allAppointments: List<Appointment> = emptyList(),
     val selectedDate: LocalDate? = null,
+    val sortOrder: AppointmentSortOrder = AppointmentSortOrder.DATE_ASC,
     val latestAppointmentDate: LocalDate? = null
 )
 
@@ -28,29 +31,38 @@ class AppointmentsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _selectedDate = MutableStateFlow<LocalDate?>(null)
+    private val _sortOrder = MutableStateFlow(AppointmentSortOrder.DATE_ASC)
 
     val uiState: StateFlow<AppointmentsUiState> = combine(
         repository.getAllAppointments(),
-        _selectedDate
-    ) { allAppointments, date ->
+        _selectedDate,
+        _sortOrder
+    ) { allAppointments, date, sort ->
         val filtered = if (date != null)
             allAppointments.filter { it.startDate <= date && it.endDate >= date }
-        else
-            allAppointments
+        else allAppointments
+        val sorted = when (sort) {
+            AppointmentSortOrder.DATE_ASC -> filtered.sortedBy { it.startDate }
+            AppointmentSortOrder.DATE_DESC -> filtered.sortedByDescending { it.startDate }
+            AppointmentSortOrder.TITLE_AZ -> filtered.sortedBy { it.title.lowercase() }
+            AppointmentSortOrder.DURATION -> filtered.sortedByDescending {
+                it.endDate.toEpochDay() - it.startDate.toEpochDay()
+            }
+        }
         AppointmentsUiState(
-            appointments = filtered,
+            appointments = sorted,
             allAppointments = allAppointments,
             selectedDate = date,
+            sortOrder = sort,
             latestAppointmentDate = allAppointments.maxByOrNull { it.startDate }?.startDate
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppointmentsUiState())
 
-    // Toggle: tapping same date again clears filter
     fun selectDate(date: LocalDate) {
         _selectedDate.value = if (_selectedDate.value == date) null else date
     }
-
     fun clearDateFilter() { _selectedDate.value = null }
+    fun setSortOrder(order: AppointmentSortOrder) { _sortOrder.value = order }
 
     fun addAppointment(appointment: Appointment) = viewModelScope.launch {
         val id = repository.addAppointment(appointment)

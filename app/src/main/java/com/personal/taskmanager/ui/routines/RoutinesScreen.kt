@@ -337,16 +337,18 @@ fun AddEditRoutineSheet(
                 }
             }
 
-            if (selectedDays.isNotEmpty()) {
-                OutlinedButton(
-                    onClick = { showTimePicker = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Schedule, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(scheduledTime?.format(DateTimeFormatter.ofPattern("HH:mm"))
-                        ?: "Set start time (optional)")
-                }
+            // Time picker always visible — shows "Not set" when no days selected
+            OutlinedButton(
+                onClick = { showTimePicker = true },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = selectedDays.isNotEmpty()
+            ) {
+                Icon(Icons.Default.Schedule, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (selectedDays.isEmpty()) "Select days above to set a time"
+                    else scheduledTime?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "Set start time (optional)"
+                )
             }
 
             Divider()

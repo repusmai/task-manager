@@ -6,7 +6,10 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 enum class Priority { LOW, MEDIUM, HIGH }
-enum class RecurrenceType { NONE, DAILY, WEEKLY, MONTHLY }
+
+// NONE=no recurrence, DAILY, WEEKLY, MONTHLY, CUSTOM=specific days of week, SPECIFIC_DATES=hand-picked dates
+enum class RecurrenceType { NONE, DAILY, WEEKLY, MONTHLY, CUSTOM_DAYS, SPECIFIC_DATES }
+
 enum class TaskStatus { PENDING, COMPLETED, OVERDUE }
 
 @Entity(tableName = "tasks")
@@ -19,9 +22,13 @@ data class Task(
     val priority: Priority = Priority.MEDIUM,
     val status: TaskStatus = TaskStatus.PENDING,
     val recurrenceType: RecurrenceType = RecurrenceType.NONE,
+    // For CUSTOM_DAYS: comma-separated 1-7 (Mon-Sun), e.g. "1,3,5"
+    // For SPECIFIC_DATES: comma-separated ISO dates, e.g. "2026-05-01,2026-05-15"
+    val recurrenceDays: String = "",
+    val recurrenceTime: LocalTime? = null,
     val categoryId: Long? = null,
     val reminderMinutesBefore: Int? = null,
-    val routineId: Long? = null, // set when spawned from a routine
+    val routineId: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val completedAt: Long? = null
 )
@@ -48,28 +55,25 @@ data class Category(
     val colorHex: String = "#6750A4"
 )
 
-// A routine template — defines a set of tasks to spawn
 @Entity(tableName = "routines")
 data class Routine(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val description: String = "",
     val colorHex: String = "#00838F",
-    // Scheduling: null = manual only
-    val scheduledTime: LocalTime? = null,       // time of day to auto-start
-    val scheduledDays: String = "",             // comma-separated ints: "1,3,5" = Mon,Wed,Fri (1=Mon..7=Sun)
+    val scheduledTime: LocalTime? = null,
+    val scheduledDays: String = "",
     val isActive: Boolean = true,
     val createdAt: Long = System.currentTimeMillis()
 )
 
-// A single step/task template within a routine
 @Entity(tableName = "routine_steps")
 data class RoutineStep(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val routineId: Long,
     val title: String,
     val description: String = "",
-    val durationMinutes: Int? = null, // estimated time
+    val durationMinutes: Int? = null,
     val priority: Priority = Priority.MEDIUM,
     val orderIndex: Int = 0
 )

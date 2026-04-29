@@ -14,12 +14,17 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
 
+enum class SortOrder {
+    DATE_ASC, DATE_DESC, PRIORITY_HIGH, PRIORITY_LOW, TITLE_AZ
+}
+
 data class TasksUiState(
     val tasks: List<Task> = emptyList(),
     val allTasks: List<Task> = emptyList(),
     val categories: List<Category> = emptyList(),
     val selectedDate: LocalDate? = null,
     val filterStatus: TaskStatus? = null,
+    val sortOrder: SortOrder = SortOrder.DATE_ASC,
     val isLoading: Boolean = false
 )
 
@@ -31,36 +36,45 @@ class TasksViewModel @Inject constructor(
 
     private val _selectedDate = MutableStateFlow<LocalDate?>(null)
     private val _filterStatus = MutableStateFlow<TaskStatus?>(null)
+    private val _sortOrder = MutableStateFlow(SortOrder.DATE_ASC)
 
     val uiState: StateFlow<TasksUiState> = combine(
         repository.getAllTasks(),
         repository.getAllCategories(),
         _selectedDate,
-        _filterStatus
-    ) { allTasks, categories, date, filter ->
+        _filterStatus,
+        _sortOrder
+    ) { allTasks, categories, date, filter, sort ->
         val dateFiltered = if (date != null) allTasks.filter { it.dueDate == date } else allTasks
-        val filtered = if (filter != null) dateFiltered.filter { it.status == filter } else dateFiltered
+        val statusFiltered = if (filter != null) dateFiltered.filter { it.status == filter } else dateFiltered
+        val sorted = when (sort) {
+            SortOrder.DATE_ASC -> statusFiltered.sortedWith(
+                compareBy<Task> { it.status == TaskStatus.COMPLETED }.thenBy { it.dueDate }.thenBy { it.dueTime })
+            SortOrder.DATE_DESC -> statusFiltered.sortedWith(
+                compareBy<Task> { it.status == TaskStatus.COMPLETED }.thenByDescending { it.dueDate }.thenByDescending { it.dueTime })
+            SortOrder.PRIORITY_HIGH -> statusFiltered.sortedWith(
+                compareBy<Task> { it.status == TaskStatus.COMPLETED }.thenByDescending { it.priority })
+            SortOrder.PRIORITY_LOW -> statusFiltered.sortedWith(
+                compareBy<Task> { it.status == TaskStatus.COMPLETED }.thenBy { it.priority })
+            SortOrder.TITLE_AZ -> statusFiltered.sortedWith(
+                compareBy<Task> { it.status == TaskStatus.COMPLETED }.thenBy { it.title.lowercase() })
+        }
         TasksUiState(
-            tasks = filtered.sortedWith(
-                compareBy<Task> { it.status == TaskStatus.COMPLETED }
-                    .thenByDescending { it.priority }
-                    .thenBy { it.dueDate }
-                    .thenBy { it.dueTime }
-            ),
+            tasks = sorted,
             allTasks = allTasks,
             categories = categories,
             selectedDate = date,
-            filterStatus = filter
+            filterStatus = filter,
+            sortOrder = sort
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TasksUiState())
 
     fun selectDate(date: LocalDate) {
         _selectedDate.value = if (_selectedDate.value == date) null else date
     }
-
     fun clearDateFilter() { _selectedDate.value = null }
-
     fun setFilter(status: TaskStatus?) { _filterStatus.value = status }
+    fun setSortOrder(order: SortOrder) { _sortOrder.value = order }
 
     fun addTask(task: Task) = viewModelScope.launch {
         val id = repository.addTask(task)
