@@ -30,39 +30,30 @@ class AppointmentsViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    private val _selectedDates = MutableStateFlow<Set<LocalDate>>(emptySet())
     private val _sortOrder = MutableStateFlow(AppointmentSortOrder.DATE_ASC)
 
+    // Appointments state — no local date filtering, date filtering is done in the UI
+    // using the shared selectedDates from TasksViewModel
     val uiState: StateFlow<AppointmentsUiState> = combine(
         repository.getAllAppointments(),
-        _selectedDates,
         _sortOrder
-    ) { allAppointments, dates, sort ->
-        val filtered = if (dates.isEmpty()) allAppointments
-                       else allAppointments.filter { appt ->
-                           dates.any { date -> appt.startDate <= date && appt.endDate >= date }
-                       }
+    ) { allAppointments, sort ->
         val sorted = when (sort) {
-            AppointmentSortOrder.DATE_ASC -> filtered.sortedBy { it.startDate }
-            AppointmentSortOrder.DATE_DESC -> filtered.sortedByDescending { it.startDate }
-            AppointmentSortOrder.TITLE_AZ -> filtered.sortedBy { it.title.lowercase() }
-            AppointmentSortOrder.DURATION -> filtered.sortedByDescending {
+            AppointmentSortOrder.DATE_ASC -> allAppointments.sortedBy { it.startDate }
+            AppointmentSortOrder.DATE_DESC -> allAppointments.sortedByDescending { it.startDate }
+            AppointmentSortOrder.TITLE_AZ -> allAppointments.sortedBy { it.title.lowercase() }
+            AppointmentSortOrder.DURATION -> allAppointments.sortedByDescending {
                 it.endDate.toEpochDay() - it.startDate.toEpochDay()
             }
         }
         AppointmentsUiState(
-            appointments = sorted, allAppointments = allAppointments,
-            selectedDates = dates, sortOrder = sort,
+            appointments = sorted,
+            allAppointments = allAppointments,
+            sortOrder = sort,
             latestAppointmentDate = allAppointments.maxByOrNull { it.startDate }?.startDate
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppointmentsUiState())
 
-    fun toggleDate(date: LocalDate) {
-        _selectedDates.value = _selectedDates.value.let {
-            if (date in it) it - date else it + date
-        }
-    }
-    fun clearDateFilter() { _selectedDates.value = emptySet() }
     fun setSortOrder(order: AppointmentSortOrder) { _sortOrder.value = order }
 
     fun addAppointment(appointment: Appointment) = viewModelScope.launch {

@@ -20,8 +20,8 @@ data class TasksUiState(
     val tasks: List<Task> = emptyList(),
     val allTasks: List<Task> = emptyList(),
     val categories: List<Category> = emptyList(),
-    val selectedDates: Set<LocalDate> = emptySet(),       // multi-select
-    val filterStatuses: Set<TaskStatus> = emptySet(),     // multi-select
+    val selectedDates: Set<LocalDate> = emptySet(),
+    val filterStatuses: Set<TaskStatus> = emptySet(),
     val sortOrder: SortOrder = SortOrder.DATE_ASC,
     val isLoading: Boolean = false
 )
@@ -36,13 +36,20 @@ class TasksViewModel @Inject constructor(
     private val _filterStatuses = MutableStateFlow<Set<TaskStatus>>(emptySet())
     private val _sortOrder = MutableStateFlow(SortOrder.DATE_ASC)
 
-    val uiState: StateFlow<TasksUiState> = combine(
-        repository.getAllTasks(),
-        repository.getAllCategories(),
+    // Combine in two steps to stay within the 5-flow typed combine limit
+    private val _filterState = combine(
         _selectedDates,
         _filterStatuses,
         _sortOrder
-    ) { allTasks, categories, dates, statuses, sort ->
+    ) { dates, statuses, sort ->
+        Triple(dates, statuses, sort)
+    }
+
+    val uiState: StateFlow<TasksUiState> = combine(
+        repository.getAllTasks(),
+        repository.getAllCategories(),
+        _filterState
+    ) { allTasks, categories, (dates, statuses, sort) ->
         val dateFiltered = if (dates.isEmpty()) allTasks
                            else allTasks.filter { it.dueDate in dates }
         val statusFiltered = if (statuses.isEmpty()) dateFiltered
@@ -60,8 +67,12 @@ class TasksViewModel @Inject constructor(
                 compareBy<Task> { it.status == TaskStatus.COMPLETED }.thenBy { it.title.lowercase() })
         }
         TasksUiState(
-            tasks = sorted, allTasks = allTasks, categories = categories,
-            selectedDates = dates, filterStatuses = statuses, sortOrder = sort
+            tasks = sorted,
+            allTasks = allTasks,
+            categories = categories,
+            selectedDates = dates,
+            filterStatuses = statuses,
+            sortOrder = sort
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TasksUiState())
 
