@@ -57,7 +57,6 @@ done
 
 if [ -z "$RUN_ID" ]; then
     echo "❌ Could not detect a running Actions workflow."
-    echo "   Check the Actions tab on GitHub manually."
     exit 1
 fi
 
@@ -65,13 +64,33 @@ echo "🚀 Build started! Run ID: $RUN_ID"
 echo "   https://github.com/$REPO/actions/runs/$RUN_ID"
 echo ""
 
+# ── Spinner runs entirely on internal clock ──────────────────────────────────
 SPINNER=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
-SPIN_IDX=0
 START_TIME=$(date +%s)
 
-while true; do
-    sleep 2
+spinner_loop() {
+    local idx=0
+    while true; do
+        local now=$(date +%s)
+        local elapsed=$(( now - START_TIME ))
+        local mins=$(( elapsed / 60 ))
+        local secs=$(( elapsed % 60 ))
+        printf "\r${SPINNER[$idx]} Building... [%dm %02ds elapsed]   " $mins $secs
+        idx=$(( (idx + 1) % 10 ))
+        sleep 0.1
+    done
+}
 
+# Start spinner in background, save its PID
+spinner_loop &
+SPINNER_PID=$!
+
+# ── API polling loop — every 2 seconds ───────────────────────────────────────
+STATUS="in_progress"
+CONCLUSION=""
+
+while [ "$STATUS" != "completed" ]; do
+    sleep 2
     RESULT=$(gh_api "https://api.github.com/repos/$REPO/actions/runs/$RUN_ID" \
         | python3 -c "
 import sys, json
@@ -79,38 +98,35 @@ data = json.load(sys.stdin)
 print(data.get('status', 'unknown'))
 print(data.get('conclusion', ''))
 " 2>/dev/null)
-
     STATUS=$(echo "$RESULT" | head -1)
     CONCLUSION=$(echo "$RESULT" | tail -1)
-
-    ELAPSED=$(( $(date +%s) - START_TIME ))
-    MINS=$((ELAPSED / 60))
-    SECS=$((ELAPSED % 60))
-    ELAPSED_STR=$(printf "%dm %02ds" $MINS $SECS)
-
-    SPIN=${SPINNER[$SPIN_IDX]}
-    SPIN_IDX=$(( (SPIN_IDX + 1) % 10 ))
-
-    printf "\r${SPIN} Building... [%s elapsed]   " "$ELAPSED_STR"
-
-    if [ "$STATUS" = "completed" ]; then
-        echo ""
-        echo ""
-        if [ "$CONCLUSION" = "success" ]; then
-            echo "┌─────────────────────────────────────────┐"
-            echo "│  ✅ Deploy successful! (${ELAPSED_STR})       │"
-            echo "│  APK is live on GitHub Releases         │"
-            echo "│  Open your app → Settings → Update      │"
-            echo "└─────────────────────────────────────────┘"
-            command -v notify-send &>/dev/null && notify-send "Task Manager Deployed ✅" "New APK is live." --icon=dialog-information
-        else
-            echo "┌─────────────────────────────────────────┐"
-            printf "│  ❌ Build failed (%-22s│\n" "${CONCLUSION})"
-            echo "│  Check Actions tab for details          │"
-            echo "└─────────────────────────────────────────┘"
-            echo "   https://github.com/$REPO/actions/runs/$RUN_ID"
-            command -v notify-send &>/dev/null && notify-send "Task Manager Build Failed ❌" "Check GitHub Actions." --icon=dialog-error
-        fi
-        exit 0
-    fi
 done
+
+# ── Stop spinner ──────────────────────────────────────────────────────────────
+kill $SPINNER_PID 2>/dev/null
+wait $SPINNER_PID 2>/dev/null
+
+ELAPSED=$(( $(date +%s) - START_TIME ))
+MINS=$(( ELAPSED / 60 ))
+SECS=$(( ELAPSED % 60 ))
+ELAPSED_STR=$(printf "%dm %02ds" $MINS $SECS)
+
+echo ""
+echo ""
+if [ "$CONCLUSION" = "success" ]; then
+    echo "┌─────────────────────────────────────────┐"
+    echo "│  ✅ Deploy successful! (${ELAPSED_STR})       │"
+    echo "│  APK is live on GitHub Releases         │"
+    echo "│  Open your app → Settings → Update      │"
+    echo "└─────────────────────────────────────────┘"
+    command -v notify-send &>/dev/null && \
+        notify-send "Task Manager Deployed ✅" "Built in ${ELAPSED_STR}. New APK is live." --icon=dialog-information
+else
+    echo "┌─────────────────────────────────────────┐"
+    printf "│  ❌ Build failed (%-22s│\n" "${CONCLUSION})"
+    echo "│  Check Actions tab for details          │"
+    echo "└─────────────────────────────────────────┘"
+    echo "   https://github.com/$REPO/actions/runs/$RUN_ID"
+    command -v notify-send &>/dev/null && \
+        notify-send "Task Manager Build Failed ❌" "Check GitHub Actions." --icon=dialog-error
+fi
