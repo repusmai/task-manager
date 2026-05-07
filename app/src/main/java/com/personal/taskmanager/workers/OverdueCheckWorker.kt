@@ -18,7 +18,7 @@ class OverdueCheckWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         repository.updateOverdueTasks()
-        // Re-schedule all pending reminders (e.g. after reboot)
+        repository.archivePastAppointments()
         val tasks = repository.getTasksWithReminders()
         tasks.forEach { scheduleReminder(applicationContext, it) }
         return Result.success()
@@ -26,18 +26,11 @@ class OverdueCheckWorker @AssistedInject constructor(
 
     companion object {
         fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<OverdueCheckWorker>(
-                1, TimeUnit.HOURS
-            ).setConstraints(
-                Constraints.Builder()
-                    .setRequiresBatteryNotLow(false)
-                    .build()
-            ).build()
-
+            val request = PeriodicWorkRequestBuilder<OverdueCheckWorker>(1, TimeUnit.HOURS)
+                .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(false).build())
+                .build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                "overdue_check",
-                ExistingPeriodicWorkPolicy.KEEP,
-                request
+                "overdue_check", ExistingPeriodicWorkPolicy.KEEP, request
             )
         }
     }

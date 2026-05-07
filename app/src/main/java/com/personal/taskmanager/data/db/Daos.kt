@@ -6,13 +6,22 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TaskDao {
-    @Query("SELECT * FROM tasks ORDER BY dueDate ASC, priority DESC")
+    @Query("SELECT * FROM tasks WHERE isArchived = 0 ORDER BY dueDate ASC, priority DESC")
     fun getAllTasks(): Flow<List<Task>>
 
-    @Query("SELECT * FROM tasks WHERE dueDate = :date ORDER BY dueTime ASC")
+    @Query("SELECT * FROM tasks WHERE isArchived = 1 ORDER BY completedAt DESC")
+    fun getArchivedTasks(): Flow<List<Task>>
+
+    @Query("UPDATE tasks SET isArchived = 1 WHERE id = :id")
+    suspend fun archiveTask(id: Long)
+
+    @Query("UPDATE tasks SET isArchived = 0, status = 'PENDING', completedAt = NULL WHERE id = :id")
+    suspend fun restoreTask(id: Long)
+
+    @Query("SELECT * FROM tasks WHERE dueDate = :date AND isArchived = 0 ORDER BY dueTime ASC")
     fun getTasksForDate(date: String): Flow<List<Task>>
 
-    @Query("SELECT * FROM tasks WHERE status = :status ORDER BY dueDate ASC")
+    @Query("SELECT * FROM tasks WHERE status = :status AND isArchived = 0 ORDER BY dueDate ASC")
     fun getTasksByStatus(status: TaskStatus): Flow<List<Task>>
 
     @Query("SELECT * FROM tasks WHERE id = :id")
@@ -30,7 +39,7 @@ interface TaskDao {
     @Delete
     suspend fun deleteTask(task: Task)
 
-    @Query("UPDATE tasks SET status = 'COMPLETED', completedAt = :timestamp WHERE id = :id")
+    @Query("UPDATE tasks SET status = 'COMPLETED', completedAt = :timestamp, isArchived = 1 WHERE id = :id")
     suspend fun markComplete(id: Long, timestamp: Long = System.currentTimeMillis())
 
     @Query("UPDATE tasks SET status = 'OVERDUE' WHERE dueDate < :today AND status = 'PENDING'")
@@ -39,10 +48,19 @@ interface TaskDao {
 
 @Dao
 interface AppointmentDao {
-    @Query("SELECT * FROM appointments ORDER BY startDate ASC, startTime ASC")
+    @Query("SELECT * FROM appointments WHERE isArchived = 0 ORDER BY startDate ASC, startTime ASC")
     fun getAllAppointments(): Flow<List<Appointment>>
 
-    @Query("SELECT * FROM appointments WHERE startDate <= :date AND endDate >= :date ORDER BY startTime ASC")
+    @Query("SELECT * FROM appointments WHERE isArchived = 1 ORDER BY startDate DESC")
+    fun getArchivedAppointments(): Flow<List<Appointment>>
+
+    @Query("UPDATE appointments SET isArchived = 1 WHERE endDate < :today AND isArchived = 0")
+    suspend fun archivePastAppointments(today: String)
+
+    @Query("UPDATE appointments SET isArchived = 0 WHERE id = :id")
+    suspend fun restoreAppointment(id: Long)
+
+    @Query("SELECT * FROM appointments WHERE startDate <= :date AND endDate >= :date AND isArchived = 0 ORDER BY startTime ASC")
     fun getAppointmentsForDate(date: String): Flow<List<Appointment>>
 
     @Query("SELECT * FROM appointments WHERE id = :id")

@@ -9,7 +9,7 @@ import com.personal.taskmanager.data.model.*
 
 @Database(
     entities = [Task::class, Appointment::class, Category::class, Routine::class, RoutineStep::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -67,5 +67,12 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
 val MIGRATION_4_5 = object : Migration(4, 5) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE routines ADD COLUMN perDayTimes TEXT NOT NULL DEFAULT ''")
+    }
+}
+
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE tasks ADD COLUMN isArchived INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE appointments ADD COLUMN isArchived INTEGER NOT NULL DEFAULT 0")
     }
 }

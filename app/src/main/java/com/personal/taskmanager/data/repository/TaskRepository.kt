@@ -25,6 +25,9 @@ class TaskRepository @Inject constructor(
     suspend fun getTaskById(id: Long): Task? = taskDao.getTaskById(id)
     suspend fun getTasksWithReminders(): List<Task> = taskDao.getTasksWithReminders()
     suspend fun updateOverdueTasks() = taskDao.markOverdueTasks(LocalDate.now().toString())
+    fun getArchivedTasks(): Flow<List<Task>> = taskDao.getArchivedTasks()
+    suspend fun archiveTask(id: Long) = taskDao.archiveTask(id)
+    suspend fun restoreTask(id: Long) = taskDao.restoreTask(id)
 
     // Appointments
     fun getAllAppointments(): Flow<List<Appointment>> = appointmentDao.getAllAppointments()
@@ -33,6 +36,9 @@ class TaskRepository @Inject constructor(
     suspend fun updateAppointment(appointment: Appointment) = appointmentDao.updateAppointment(appointment)
     suspend fun deleteAppointment(appointment: Appointment) = appointmentDao.deleteAppointment(appointment)
     suspend fun getAppointmentsWithReminders(): List<Appointment> = appointmentDao.getAppointmentsWithReminders()
+    fun getArchivedAppointments(): Flow<List<Appointment>> = appointmentDao.getArchivedAppointments()
+    suspend fun archivePastAppointments() = appointmentDao.archivePastAppointments(LocalDate.now().toString())
+    suspend fun restoreAppointment(id: Long) = appointmentDao.restoreAppointment(id)
 
     // Categories
     fun getAllCategories(): Flow<List<Category>> = categoryDao.getAllCategories()

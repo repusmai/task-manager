@@ -30,7 +30,8 @@ data class Task(
     val reminderMinutesBefore: Int? = null,
     val routineId: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val completedAt: Long? = null
+    val completedAt: Long? = null,
+    val isArchived: Boolean = false
 )
 
 @Entity(tableName = "appointments")
@@ -45,7 +46,8 @@ data class Appointment(
     val location: String = "",
     val colorHex: String = "#6750A4",
     val reminderMinutesBefore: Int? = null,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val isArchived: Boolean = false
 )
 
 @Entity(tableName = "categories")

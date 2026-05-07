@@ -42,6 +42,7 @@ fun TasksScreen(
     onNavigateToCalendar: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToRoutines: () -> Unit,
+    onNavigateToArchive: () -> Unit,
     tasksViewModel: TasksViewModel = hiltViewModel(),
     appointmentsViewModel: AppointmentsViewModel = hiltViewModel()
 ) {
@@ -104,6 +105,7 @@ fun TasksScreen(
                     IconButton(onClick = { showSortSheet = true }) {
                         Icon(Icons.Default.Sort, "Sort")
                     }
+                    IconButton(onClick = onNavigateToArchive) { Icon(Icons.Default.Archive, "Archive") }
                     IconButton(onClick = onNavigateToRoutines) { Icon(Icons.Default.Loop, "Routines") }
                     IconButton(onClick = onNavigateToCalendar) { Icon(Icons.Default.CalendarMonth, "Calendar") }
                     IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, "Settings") }
